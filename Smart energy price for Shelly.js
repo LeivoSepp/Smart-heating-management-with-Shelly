@@ -7,7 +7,7 @@
 // Simplified energy prices used by this script https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
 
 // To use tomorrow prices, put this parameter 1. To use today prices, put this parameter to 0.
-// Keep this 1 and do not change this as you will get unexpected results.
+// Keep this 1 otherwize you will get unexpected results.
 let period_day = 1;
 
 // How many cheap hours you need during a day? Number 1-20. 
@@ -98,40 +98,44 @@ function find_cheapest(result) {
         print("Cheapest daily price:", sorted_prices[0][1].price, " ", sorted_prices[0][1].time);
         print("Most expensive daily price", sorted_prices[sorted_prices.length - 1][1].price, " ", sorted_prices[sorted_prices.length - 1][1].time);
 
-        // This one looks weird. The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET, so only 4 is left.
-        // We will use timer to add more than 4 slots. We need 2 second delays between each 4 item Timer set. 
+        // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET, so only 4 is left.
+        // These 4 RPC calls are used here. 
         print("Starting to add hours 0-3");
         if (needed_length - 4 < 1) { data_indx = needed_length; }
         else { data_indx = 4; }
         addSchedules(0, data_indx);
 
-        if (needed_length - 5 >= 0) {
-            print("Starting to add hours 4-7");
+        // This is the hack with the timers to add more RPC calls. We simply add a 2 second delay between the actions :) 
+        // Function "delayed_timers" is called maximum four times (RPC calls from 5-20) to add proper amount of schedulers
+        // The schedulers are limited also 5, as one is used to stop the script we can call maximum 4 timers.
+        // This one might look weird, but I couldn't make it anyway smarter as calling out timers is not working through for-loop.
+        if (needed_length - 4 > 0) {
             Timer.set(2 * 1000, false, function () {
+                print("Starting to add hours 4-7");
                 if (needed_length - 8 < 1) { data_indx = needed_length; }
                 else { data_indx = 8; }
                 addSchedules(4, data_indx);
             });
         }
-        if (needed_length - 9 >= 0) {
-            print("Starting to add hours 8-11");
+        if (needed_length - 8 > 0) {
             Timer.set(4 * 1000, false, function () {
+                print("Starting to add hours 8-11");
                 if (needed_length - 12 < 1) { data_indx = needed_length; }
                 else { data_indx = 12; }
                 addSchedules(8, data_indx);
             });
         }
-        if (needed_length - 13 >= 0) {
-            print("Starting to add hours 12-15");
+        if (needed_length - 12 > 0) {
             Timer.set(6 * 1000, false, function () {
+                print("Starting to add hours 12-15");
                 if (needed_length - 16 < 1) { data_indx = needed_length; }
                 else { data_indx = 16; }
                 addSchedules(12, data_indx);
             });
         }
-        if (needed_length - 17 >= 0) {
-            print("Starting to add hours 16-19");
+        if (needed_length - 16 > 0) {
             Timer.set(8 * 1000, false, function () {
+                print("Starting to add hours 16-19");
                 if (needed_length - 20 < 1) { data_indx = needed_length; }
                 else { data_indx = 20; }
                 addSchedules(16, data_indx);

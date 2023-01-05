@@ -1,10 +1,14 @@
 // This script will turn on Shelly for number of cheapest hours during a day.
 // It's scheduled to run daily after 23:00 to set proper timeslots for next day.
 // by Leivo Sepp, 03.01.2023
-// Original app made by https://elspotcontrol.netlify.app/
 
+// Market price generation credit goes to this guy https://elspotcontrol.netlify.app/. 
+// He is taking care that the market price is published in each day into this place: https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
+// Please have a look the EE in the link which reflects country.
 // Origin of energy prices https://transparency.entsoe.eu/transmission-domain/r2/dayAheadPrices/show 
-// Simplified energy prices used by this script https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
+
+// Set the country Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV
+let country_code = "EE";
 
 // To use tomorrow prices, put this parameter 1. To use today prices, put this parameter to 0.
 // Keep this 1 otherwize you will get unexpected results.
@@ -89,7 +93,6 @@ function find_cheapest(result) {
                 tmp = sorted_prices[j];
                 sorted_prices.splice(j, 1, sorted_prices[max_indx]);
                 sorted_prices.splice(max_indx, 1, tmp);
-
             }
             j--;
         }
@@ -224,7 +227,7 @@ function scheduleScript() {
 
 function setSchedulers() {
     print("Starting to fetch market prices ...");
-    Shelly.call("HTTP.GET", { url: "https://elspotcontrol.netlify.app/spotprices-v01-EE.json" }, find_cheapest);
+    Shelly.call("HTTP.GET", { url: "https://elspotcontrol.netlify.app/spotprices-v01-"+country_code+".json" }, find_cheapest);
 }
 
 setTimer(is_reverse, 1);

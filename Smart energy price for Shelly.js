@@ -7,7 +7,7 @@
 // Simplified energy prices used by this script https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
 
 // To use tomorrow prices, put this parameter 1. To use today prices, put this parameter to 0.
-// Do not change this as you will get unexpected results.
+// Keep this 1 and do not change this as you will get unexpected results.
 let period_day = 1;
 
 // How many cheap hours you need during a day? Number 1-20. 

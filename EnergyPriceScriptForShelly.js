@@ -3,8 +3,7 @@
 // by Leivo Sepp, 03.01.2023
 
 // Market price generation credit goes to this guy https://elspotcontrol.netlify.app/. 
-// He is taking care that the market price is published in each day into this place: https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
-// Please have a look the EE in the link which reflects country.
+// He is taking care that the market price is published each day into this place: https://elspotcontrol.netlify.app/spotprices-v01-EE.json 
 // Origin of energy prices https://transparency.entsoe.eu/transmission-domain/r2/dayAheadPrices/show 
 
 // Set the country Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV
@@ -20,7 +19,7 @@ let period_day = 1;
 let needed_length = 10;
 
 // Some heating systems requires reversed relay. Put it true if the heating management requires so.
-// My personal heating system is requires the reversed management.
+// For example my personal ground source heat pump requires reversed management. If two contacts are closed, then the pump is turned off.
 let is_reverse = true;
 
 // If fetching prices fails, use this time as a start time, 2 means 02:00. 
@@ -227,7 +226,7 @@ function scheduleScript() {
 
 function setSchedulers() {
     print("Starting to fetch market prices ...");
-    Shelly.call("HTTP.GET", { url: "https://elspotcontrol.netlify.app/spotprices-v01-"+country_code+".json" }, find_cheapest);
+    Shelly.call("HTTP.GET", { url: "https://elspotcontrol.netlify.app/spotprices-v01-" + country_code + ".json" }, find_cheapest);
 }
 
 setTimer(is_reverse, 1);

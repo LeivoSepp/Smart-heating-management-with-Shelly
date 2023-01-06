@@ -1,6 +1,15 @@
 # Smart energy price for Shelly
 
-This script will turn on Shelly for number of cheapest hours during a day.
+## What does this script doing?
+This script will turn on [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/) for a number of cheapest hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/).
+
+## How to use this script?
+1. Go and buy any [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
+2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
+3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
+4. Add script, just copy and paste all
+5. Configure
+
 It's scheduled to run daily after 23:00 to set proper timeslots for next day.
 
 Before running script you must define the amount of cheapest hours you want to see "needed_length=5".

@@ -1,31 +1,71 @@
 # Smart energy price for Shelly
 
 ## What does this script doing?
-This script will turn on [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/) for a number of cheapest hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/).
+This script will turn on [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/) for a number of cheapest hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/). 
+
+Your household energy bill will be smaller if you use the most energy hungry appliances in cheapest time of a day. Some of the most energy hungry appliances are water heater, air-source or ground-source heatpumps and radiators.  
+
+You will only benefit from this in case of having energy contract with hourly market price. If your energy contract has one flat rate, then this solution will not help to redure your energy bill.
 
 ## How to use this script?
 1. Go and buy any [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
 2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
 3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
-4. Add script, just copy and paste all
-5. Configure
+4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js) and paste it to Shelly scripting window.
+5. Configure following script parameters:
+    - Set the country code. Possible values: Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV. ``country_code = "EE"``
+    - Set the number of cheap hours required during a day. Values in range 1-20. ``needed_hours=5``  
+    - Set relay mode - normal or reversed. Values true/false. ``is_reverse = true`` 
+    - Set default start time which is used if getting energy pricec from the internet is failed. Values in range 0-23.  ``default_start_time = 1``
+6. Click "Save" and "Start". 
 
-It's scheduled to run daily after 23:00 to set proper timeslots for next day.
+## How to add script into Shelly
+Shelly IP address can be found under Setting - Device Information - Device IP. Just click on the IP address and new Shely window will open.
 
-Before running script you must define the amount of cheapest hours you want to see "needed_length=5".
+![How to find Shelly IP address](/images/OpenShellyPage.jpg)
+
+- In Shelly page click "Scripts" and "Add script".
+
+![How to add script](/images/AddScript1.jpg)
+
+- Give a name to the script.
+- Copy the code from this [page](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js).  
+- Paste the text into script window.
+- Click Save.
+
+![Where to paste the script](/images/AddScript2.jpg)
+
+## How this script works?
+
+1. This script requires internet connection as it needs to download energy market prices in each day.
+2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
+3. If the script was able to download energy prices, then the script:
+
+    1. finds number of cheapest hours from a day based on ``neede_hours`` parameter,
+    2. creates number of schedules to turn on Shelly,
+    3. creates automatic 1 hour countdown timer to turn off Shelly.
+
 Example:
-If number is set to 5 then Shelly will turn on for 5 most cheapest hours during a day. 
+
+> If ``needed_hours = 5`` then Shelly is switched on for the 5 cheapest hours in a day. 
 If cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then Shelly is turned on for 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
 
-Some heating systems requires reversed relay. Put "is_reverse = true" if the heating management requires so.
-For example my personal heating system is requires the reversed management.
+4. If the script wasn't able to get the energy prices from the internet, then the script:
 
-Internet is brokem sometimes and if fetching prices fails from the internet, then use predefined "default_start_time = 1" where 1 means 01:00. 
-if "needed_length = 5", then Shelly is turned on from 01:00 to 06:00
+    1. creates just one schedule which start at the time set by parameter ``default_start_time``
+    2. creates automatic countdown timer with the length of ``neede_hours`` to turn off Shelly. 
 
-Shelly is turned on by schedulers and will be turned off by automatic one hour countdown timer to flip the status.
+Example:
 
+> If ``default_start_time = 1`` and ``needed_length = 5``, then Shelly is switched on for 01:00-06:00. 
+
+5. Some heating systems requires reversed relay. Put ``is_reverse = true`` if this is the case for your heating system.
+For example my personal ground-source heatpump is requires the reversed management.
+
+## Credit 
 Market price generation credit goes to this guy https://elspotcontrol.netlify.app/. 
+
 He is taking care that the market price is published in each day into this place: https://elspotcontrol.netlify.app/spotprices-v01-EE.json
-Please have a look the EE in the link which reflects country.
+
+Origin of energy prices is taken from this place [Entsoe Day-ahead Prices](https://transparency.entsoe.eu/transmission-domain/r2/dayAheadPrices/show)
 

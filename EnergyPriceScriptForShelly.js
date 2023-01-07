@@ -9,21 +9,17 @@
 // Set the country Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV
 let country_code = "EE";
 
-// To use tomorrow prices, put this parameter 1. To use today prices, put this parameter to 0.
-// Keep this 1 otherwize you will get unexpected results.
-let period_day = 1;
-
 // How many cheap hours you need during a day? Number 1-20. 
 // For example if this number is set to 5 then Shelly will be turned on for 5 most cheapest hours during a day. 
 // If the cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then the Shelly is turned on 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
-let needed_length = 10;
+let needed_hours = 5;
 
 // Some heating systems requires reversed relay. Put it true if the heating management requires so.
 // For example my personal ground source heat pump requires reversed management. If two contacts are closed, then the pump is turned off.
-let is_reverse = true;
+let is_reverse = false;
 
 // If fetching prices fails, use this time as a start time, 2 means 02:00. 
-// if needed_length is 5, then the Shelly is turned on from 02:00 to 07:00
+// if needed_hours is 5, then the Shelly is turned on from 02:00 to 07:00
 let default_start_time = 1;
 
 // Crontab for running this script. 
@@ -44,9 +40,9 @@ let data_indx;
 
 function find_cheapest(result) {
     if (result === null) {
-        // If there is no result, then use the default_start_time and needed_length
+        // If there is no result, then use the default_start_time and needed_hours
         print("Fetching market prices failed. Adding one big timeslot.");
-        setTimer(is_reverse, needed_length);
+        setTimer(is_reverse, needed_hours);
         addSchedules(default_start_time, default_start_time + 1);
     }
     else {
@@ -56,9 +52,9 @@ function find_cheapest(result) {
         let prices = JSON.parse(result.body);
         let hourly_prices = prices["hourly_prices"];
 
-        // Creating an array depending on parameter "period_day" (today or tomorrow)
+        // Creating an array from tomorrow prices
         for (let period in hourly_prices) {
-            if (period.slice(0, 1) === JSON.stringify(period_day)) {
+            if (period.slice(0, 1) === "1") {
                 sorted_prices.push([period, hourly_prices[period]]);
             }
         }
@@ -103,7 +99,7 @@ function find_cheapest(result) {
         // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET, so only 4 is left.
         // These 4 RPC calls are used here. 
         print("Starting to add hours 0-3");
-        if (needed_length - 4 < 1) { data_indx = needed_length; }
+        if (needed_hours - 4 < 1) { data_indx = needed_hours; }
         else { data_indx = 4; }
         addSchedules(0, data_indx);
 
@@ -111,34 +107,34 @@ function find_cheapest(result) {
         // Function "delayed_timers" is called maximum four times (RPC calls from 5-20) to add proper amount of schedulers
         // The schedulers are limited also 5, as one is used to stop the script we can call maximum 4 timers.
         // This one might look weird, but I couldn't make it anyway smarter as calling out timers is not working through for-loop.
-        if (needed_length - 4 > 0) {
+        if (needed_hours - 4 > 0) {
             Timer.set(2 * 1000, false, function () {
                 print("Starting to add hours 4-7");
-                if (needed_length - 8 < 1) { data_indx = needed_length; }
+                if (needed_hours - 8 < 1) { data_indx = needed_hours; }
                 else { data_indx = 8; }
                 addSchedules(4, data_indx);
             });
         }
-        if (needed_length - 8 > 0) {
+        if (needed_hours - 8 > 0) {
             Timer.set(4 * 1000, false, function () {
                 print("Starting to add hours 8-11");
-                if (needed_length - 12 < 1) { data_indx = needed_length; }
+                if (needed_hours - 12 < 1) { data_indx = needed_hours; }
                 else { data_indx = 12; }
                 addSchedules(8, data_indx);
             });
         }
-        if (needed_length - 12 > 0) {
+        if (needed_hours - 12 > 0) {
             Timer.set(6 * 1000, false, function () {
                 print("Starting to add hours 12-15");
-                if (needed_length - 16 < 1) { data_indx = needed_length; }
+                if (needed_hours - 16 < 1) { data_indx = needed_hours; }
                 else { data_indx = 16; }
                 addSchedules(12, data_indx);
             });
         }
-        if (needed_length - 16 > 0) {
+        if (needed_hours - 16 > 0) {
             Timer.set(8 * 1000, false, function () {
                 print("Starting to add hours 16-19");
-                if (needed_length - 20 < 1) { data_indx = needed_length; }
+                if (needed_hours - 20 < 1) { data_indx = needed_hours; }
                 else { data_indx = 20; }
                 addSchedules(16, data_indx);
             });
@@ -187,6 +183,9 @@ function addSchedules(start_indx, data_indx) {
         }
 
         print("Scheduled start at: ", hour, " price: ", price);
+
+        // Remove leading zeros from hour
+        if (hour.slice(0, 1) === "0") { hour = hour.slice(1, 2); }
 
         // Set the start time crontab
         let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";

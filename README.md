@@ -35,6 +35,21 @@ Shelly IP address can be found under Setting - Device Information - Device IP. J
 
 ![Where to paste the script](/images/AddScript2.jpg)
 
+* Click "Start"!
+* Click "Scripts" to go back into scipts list.
+* Enable the script to run automatically in each day.
+
+![Enable script](/images/AddScript3.jpg)
+
+## How can I see the outcome?
+
+In Shelly page click "Home" and then click "Switch0" and then find "Schedules" and "Timers".
+
+![Check schedules](/images/CheckSchedules1.jpg)
+
+The schedulers can be seen also in page https://home.shelly.cloud/.
+![Check schedules](/images/CheckSchedules2.jpg)
+
 ## How this script works?
 
 1. This script requires internet connection as it needs to download energy market prices in each day.

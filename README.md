@@ -14,7 +14,7 @@ You will only benefit from this in case of having energy contract with hourly ma
 4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js) and paste it to Shelly scripting window.
 5. Configure following script parameters:
     - Set the country code. Possible values: Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV. ``country_code = "EE"``
-    - Set the number of cheap hours required during a day. Values in range 1-20. ``needed_hours=5``  
+    - Set the number of cheap hours required during a day. Values in range 1-20. ``needed_hours = 5``  
     - Set relay mode - normal or reversed. Values true/false. ``is_reverse = true`` 
     - Set default start time which is used if getting energy pricec from the internet is failed. Values in range 0-23.  ``default_start_time = 1``
 6. Click "Save" and "Start". 
@@ -56,7 +56,7 @@ The schedulers can be seen also in page https://home.shelly.cloud/.
 2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
 3. If the script was able to download energy prices, then the script:
 
-    1. finds number of cheapest hours from a day based on ``neede_hours`` parameter,
+    1. finds number of cheapest hours from a day based on ``neede_hours = 5`` parameter,
     2. creates number of schedules to turn on Shelly,
     3. creates automatic 1 hour countdown timer to turn off Shelly.
 
@@ -67,8 +67,8 @@ If cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then Shelly is turne
 
 4. If the script wasn't able to get the energy prices from the internet, then the script:
 
-    1. creates just one schedule which start at the time set by parameter ``default_start_time``
-    2. creates automatic countdown timer with the length of ``neede_hours`` to turn off Shelly. 
+    1. creates just one schedule which start at the time set by parameter ``default_start_time = 1``
+    2. creates automatic countdown timer with the length of ``neede_hours = 5`` to turn off Shelly. 
 
 Example:
 

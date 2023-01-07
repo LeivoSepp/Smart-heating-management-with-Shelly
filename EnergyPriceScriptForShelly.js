@@ -105,7 +105,7 @@ function find_cheapest(result) {
 
         // This is the hack with the timers to add more RPC calls. We simply add a 2 second delay between the actions :) 
         // Function "delayed_timers" is called maximum four times (RPC calls from 5-20) to add proper amount of schedulers
-        // The schedulers are limited also 5, as one is used to stop the script we can call maximum 4 timers.
+        // The Timers in Shelly script are limited also to 5, as one is used to stop the script we can call maximum 4 timers.
         // This one might look weird, but I couldn't make it anyway smarter as calling out timers is not working through for-loop.
         if (needed_hours - 4 > 0) {
             Timer.set(2 * 1000, false, function () {

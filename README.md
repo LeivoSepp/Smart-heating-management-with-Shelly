@@ -1,14 +1,14 @@
 # Smart energy price for Shelly
 
 ## What does this script doing?
-This script will turn on [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/) for a number of cheapest hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/). 
+This script will turn on [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) for number of cheap hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/). 
 
-Your household energy bill will be smaller if you use the most energy hungry appliances in cheapest time of a day. Some of the most energy hungry appliances are water heater, air-source or ground-source heatpumps and radiators.  
+Your household electric bill will be smaller if you use the energy hungry appliances in cheapest time of a day. Some of the energy hungry appliances are water heater, air-source or ground-source heatpump, electric radiator, underfloor electric heater and air conditioning.  
 
 You will only benefit from this in case of having energy contract with hourly market price. If your energy contract has one flat rate, then this solution will not help to redure your energy bill.
 
 ## How to use this script?
-1. Go and buy any [Shelly Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
+1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
 2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
 3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
 4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js) and paste it to Shelly scripting window.

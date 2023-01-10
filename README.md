@@ -13,9 +13,9 @@ You will only benefit from this in case of having energy contract with hourly ma
 3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
 4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js) and paste it to Shelly scripting window.
 5. Configure following script parameters:
-    - Set the country code. Possible values: Estonia-EE, Finland-FI, Lthuania-LT, Latvia-LV. ``country_code = "EE"``
+    - Set the country code. Possible values: Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv. ``country_code = "ee"``
     - Set the number of cheap hours required during a day. Values in range 1-20. ``needed_hours = 5``  
-    - Set relay mode - normal or reversed. Values true/false. ``is_reverse = true`` 
+    - Set relay mode - normal or reversed. Values true/false. ``is_reverse = false``. 99% of the cases this parameter should be false. Don't change it.
     - Set default start time which is used if getting energy pricec from the internet is failed. Values in range 0-23.  ``default_start_time = 1``
 6. Click "Save" and "Start". 
 
@@ -77,10 +77,7 @@ Example:
 5. Some heating systems requires reversed relay. Put ``is_reverse = true`` if this is the case for your heating system.
 For example my personal ground-source heatpump is requires the reversed management.
 
-## Credit 
-Market price generation credit goes to this guy https://elspotcontrol.netlify.app/. 
+## Where we get the market prices?
 
-He is taking care that the market price is published in each day into this place: https://elspotcontrol.netlify.app/spotprices-v01-EE.json
-
-Origin of energy prices is taken from this place [Entsoe Day-ahead Prices](https://transparency.entsoe.eu/transmission-domain/r2/dayAheadPrices/show)
+Energy Market price is downloaded from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET). 
 

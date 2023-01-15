@@ -1,8 +1,10 @@
 # This is an old version of the script
 
-<mark>This doesnt have heating curve based on temperature forecast. I suggest to use the latest one [here](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly)</mark>
+**IMPORTANT**
 
-# Smart energy price for Shelly
+This script not using temperature forecast to calculate heating curve. I suggest to use the latest one [here](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly)
+
+# Smart energy price for Shelly (OLD)
 
 ## What does this script doing?
 This script will turn on [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) for number of cheap hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/). 

@@ -1,4 +1,4 @@
-# Household heating management based on weather forecast and electricity market price with Shelly
+# Smart heating management with Shelly
 
 ## What does this script doing?
 This script is calculating required heating time based on weather forecast, and turn on your heating system for cheapest hours in a day based on [electricity market price](https://dashboard.elering.ee/et/nps/price).

@@ -11,8 +11,6 @@ This script is depends on two services:
 * electricity market price from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET),
 * weather forecast from [Open-Meteo API](https://open-meteo.com/en/docs).
 
----
-
 ## Does it really reduce my electric bills?
 
 Short answer: yes.
@@ -36,10 +34,7 @@ No other countries electricity market price exist in Elering API.
 
 Set your country parameter ``country = "ee"``.
 
----
 ## Why the heating hours is based on weather forecast?
-
----
 
 If outside temperature +20 degrees, you don't need heating. This is so true.
 
@@ -67,11 +62,7 @@ If you are not saticfied with the Shelly identified location then put a pin into
 
 The temperature and heating time relationship is called **heating curve**.
 
----
-
 ## How the heating curve is looks like?
-
----
 
 Heating time is based on your household insulation. For example an old and not insulated house need 10 h heating if outside is -5 degrees, while new A-class house might need only 4 hours.
 
@@ -96,11 +87,7 @@ You can build your own heating curve equation if you feel comfortable to do so.
 
 Sidenote! Shelly scripting has a technical limitations and this is the reason of having maximum number of hours 20 and not 24. If Shelly will change the RPC call limitation in future then this script can be easily modified to support 24 hours.
 
----
-
 ## How to use this script?
-
----
 
 1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
 2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
@@ -115,11 +102,7 @@ Sidenote! Shelly scripting has a technical limitations and this is the reason of
     - Set relay mode - normal or reversed. Values true/false. ``is_reverse = false``. 99% of the cases this parameter should be false. Don't change it.
 7. Click "Save" and "Start". 
 
----
-
 ## How to add script into Shelly
-
----
 
 Shelly IP address can be found under Setting - Device Information - Device IP. Just click on the IP address and new Shely window will open.
 
@@ -142,11 +125,7 @@ Shelly IP address can be found under Setting - Device Information - Device IP. J
 
 <img src="images/AddScript3.jpg" alt="Enable script" width="400">
 
----
-
 ## How can I see the outcome?
-
----
 
 In Shelly page click "Home" and then click "Switch0" and then find "Schedules" and "Timers".
 
@@ -156,11 +135,7 @@ The schedulers can be seen also in page https://home.shelly.cloud/.
 
 <img src="images/CheckSchedules2.jpg" alt="Check schedules" width="400">
 
----
-
 ## How this script works?
-
----
 
 1. This script requires internet connection to download daily basis electricity market prices and weather forecast.
 2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.

@@ -15,8 +15,6 @@ This script is depends on two services:
 
 ## Does it really reduce my electric bills?
 
----
-
 Short answer: yes.
 
 Long answer. Your overall daily electric consumption will stay same, but this script will turn on your heating devices for cheapest hours. 

@@ -25,7 +25,7 @@ Electicity price can vary sometimes 100 times during a day. Check  [electricity 
 
 ![Energy price variability](/images/marketpriceexample.jpg)
 
-<mark>**IMPORTANT**</mark> 
+**IMPORTANT**
 
 > You will only benefit in case of having hourly priced energy contract. If your energy contract has one flat rate, then this solution will not help to redure your energy bill.
 
@@ -44,7 +44,7 @@ Now you got why weather forecast is very important to calculate next day heating
 
 To get your home weather forecast, location data is needed. 
 
-<mark>IMPORTANT</mark>
+**IMPORTANT**
 
 > Please makse sure your Shelly device has correct location. Shelly - Settings - Geolocation - Latitude/Longitude.
 
@@ -70,7 +70,7 @@ This is the reason the scipt has parameter ``heatingCurve`` which is used to set
 
 This graph shows how the heating time is dependent on temperature and a parameter ``heatingCurve``.
 
-<mark>IMPORTANT</mark>
+**IMPORTANT**
 
 > You can start using this script with the default ``heatingCurve = 5``, and take a look how this works for you. If you feel cold, then increase this number. If you feel too warm, then decrease this number. 
 

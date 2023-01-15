@@ -1,4 +1,10 @@
-# Smart energy price for Shelly
+# This is an old version of the script
+
+**IMPORTANT**
+
+This script not using temperature forecast to calculate heating curve. I suggest to use the latest one [here](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly)
+
+# Smart energy price for Shelly (OLD)
 
 ## What does this script doing?
 This script will turn on [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) for number of cheap hours during a day based on the [energy market price](https://www.nordpoolgroup.com/en/Market-data1/Dayahead/Area-Prices/ALL1/Hourly/). 
@@ -56,7 +62,7 @@ The schedulers can be seen also in page https://home.shelly.cloud/.
 2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
 3. If the script was able to download energy prices, then the script:
 
-    1. finds number of cheapest hours from a day based on ``neede_hours = 5`` parameter,
+    1. finds number of cheapest hours from a day based on ``needed_hours = 5`` parameter,
     2. creates number of schedules to turn on Shelly,
     3. creates automatic 1 hour countdown timer to turn off Shelly.
 
@@ -72,7 +78,7 @@ If cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then Shelly is turne
 
 Example:
 
-> If ``default_start_time = 1`` and ``needed_length = 5``, then Shelly is switched on for 01:00-06:00. 
+> If ``default_start_time = 1`` and ``needed_hours = 5``, then Shelly is switched on for 01:00-06:00. 
 
 5. Some heating systems requires reversed relay. Put ``is_reverse = true`` if this is the case for your heating system.
 For example my personal ground-source heatpump is requires the reversed management.

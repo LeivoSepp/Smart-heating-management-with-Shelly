@@ -22,33 +22,33 @@ You will only benefit from this in case of having energy contract with hourly ma
 ## How to add script into Shelly
 Shelly IP address can be found under Setting - Device Information - Device IP. Just click on the IP address and new Shely window will open.
 
-![How to find Shelly IP address](/images/OpenShellyPage.jpg)
+![How to find Shelly IP address](../images/OpenShellyPage.jpg)
 
 - In Shelly page click "Scripts" and "Add script".
 
-![How to add script](/images/AddScript1.jpg)
+![How to add script](../images/AddScript1.jpg)
 
 - Give a name to the script.
 - Copy the code from this [page](https://github.com/LeivoSepp/Smart-energy-price-for-Shelly/blob/master/EnergyPriceScriptForShelly.js).  
 - Paste the text into script window.
 - Click Save.
 
-![Where to paste the script](/images/AddScript2.jpg)
+![Where to paste the script](../images/AddScript2.jpg)
 
 * Click "Start"!
 * Click "Scripts" to go back into scipts list.
 * Enable the script to run automatically in each day.
 
-![Enable script](/images/AddScript3.jpg)
+![Enable script](../images/AddScript3.jpg)
 
 ## How can I see the outcome?
 
 In Shelly page click "Home" and then click "Switch0" and then find "Schedules" and "Timers".
 
-![Check schedules](/images/CheckSchedules1.jpg)
+![Check schedules](../images/CheckSchedules1.jpg)
 
 The schedulers can be seen also in page https://home.shelly.cloud/.
-![Check schedules](/images/CheckSchedules2.jpg)
+![Check schedules](../images/CheckSchedules2.jpg)
 
 ## How this script works?
 

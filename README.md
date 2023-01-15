@@ -20,7 +20,7 @@ Some of the energy hungry appliances are water heater, air-source or ground-sour
 
 Electicity price can vary sometimes 100 times during a day. Check  [electricity market prices](https://dashboard.elering.ee/et/nps/price).
 
-![Energy price variability](../images/marketpriceexample.jpg)
+![Energy price variability](/images/marketpriceexample.jpg)
 
 **Important** 
 
@@ -47,15 +47,15 @@ Please makse sure your Shelly device has proper location identified. Shelly - Se
 
 Shelly location is based on your internet provider IP-address and it is very likely not your home location.
 
-![Shelly geolocation](../images/ShellyLocation.jpg)
+![Shelly geolocation](/images/ShellyLocation.jpg)
 
 Copy values from latitude and longitude fields and put them into googl maps to know which place is identified by Shelly.
 
-![Check location](../images/checklocation.jpg)
+![Check location](/images/checklocation.jpg)
 
 If you are not saticfied with the Shelly identified location then put a pin into googl maps, copy latitude/longitude and overwrite your Shelly location.
 
-![Find location data with googl maps](../images/locationdata.jpg)
+![Find location data with googl maps](/images/locationdata.jpg)
 
 The temperature and heating time relationship is called **heating curve**.
 
@@ -68,7 +68,7 @@ This graph shows how the heating time is dependent on temperature and a paramete
 
 You can start using this script with the default ``heatingCurve = 5``, and take a look how this works for you. If you feel cold, then increase this number. If you feel too warm, then decrease this number. 
 
-![Heating curve](../images/HeatingCurve.jpg)
+![Heating curve](/images/HeatingCurve.jpg)
 
 If you like math, then this is the quadratic equation to calculate heating time: ``(startingTemp-avgTemp)^2 + (heatingCurve / powerFactor) * (startingTemp-avgTemp)``.
 

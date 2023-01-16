@@ -85,8 +85,6 @@ If you like math, then this is the quadratic equation to calculate heating time:
 
 You can build your own heating curve equation if you feel comfortable to do so.
 
-Sidenote! Shelly scripting has a technical limitations and this is the reason of having maximum number of hours 20 and not 24. If Shelly will change the RPC call limitation in future then this script can be easily modified to support 24 hours.
-
 ## How to use this script?
 
 1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
@@ -97,7 +95,7 @@ Sidenote! Shelly scripting has a technical limitations and this is the reason of
     - Set the country code. Possible values: Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv. ``country = "ee"``
     - Set heating curve based on your household: ``heatingCurve = 5``
 6. Configure optional parameters:
-    - Set the number of cheap hours required during a day. This is used in case the weather forecast can't be get. Values in range 1-20.  ``heatingTime = 5``  
+    - Set the number of cheap hours required during a day. This is used in case the weather forecast can't be get. Values in range 1-24.  ``heatingTime = 5``  
     - Set default start time which is used in case get energy price is failed. Values in range 0-23.  ``default_start_time = 1``
     - Set relay mode - normal or reversed. Values true/false. ``is_reverse = false``. 99% of the cases this parameter should be false. Don't change it.
 7. Click "Save" and "Start". 

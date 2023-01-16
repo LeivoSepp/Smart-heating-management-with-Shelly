@@ -24,7 +24,7 @@ let startingTemp = 10;
 // powerFactor is used to set quadratic equation parabola curve flat or steep. Change it with your own responsibility.
 let powerFactor = 0.2;
 
-// This parameter used to set a number of heating hours in a day in case the weather forecast fails. Number 1-20. 
+// This parameter used to set a number of heating hours in a day in case the weather forecast fails. Number 1-24. 
 // If Shelly was able to get the forecast, then this number is owerwritten by the heating curve calculation.
 // For example if this number is set to 5 then Shelly will be turned on for 5 most cheapest hours during a day. 
 // If the cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then the Shelly is turned on 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
@@ -51,8 +51,9 @@ let sorted = [];
 let weatherDate;
 let dateStart;
 let dateEnd;
-let lat;
-let lon;
+let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
+let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
+let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
 
 // Crontab for running this script. 
 // This script is run at random moment during the first 15 minutes after 23:00
@@ -67,47 +68,38 @@ let script_number = Shelly.getCurrentScriptId();
 
 // Let's start with Shelly GetStatus to get location, date and time
 function getShellyStatus() {
-    // Let's call GetConfig to get Shelly location latitude and longitude used for temperature forecast
-    Shelly.call("Sys.GetConfig", {}, function (resp) {
-        lat = JSON.stringify(resp["location"]["lat"]);
-        lon = JSON.stringify(resp["location"]["lon"]);
-    });
-    Shelly.call("Sys.GetStatus", {}, function (result) {
-        let shellyUnixtime = result.unixtime; //The unixtime is looks like this number 1673726521
-        let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
-        let shellyHour = JSON.parse(result.time.slice(0, 2));
-        // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
-        if (shellyHour >= 15) {
-            addDays = 0
-        }
-        let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
-        let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
+    let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
+    let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
+    // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
+    if (shellyHour >= 15) {
+        addDays = 0
+    }
+    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
+    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
 
-        // Let's prepare proper date-time formats for Elering query
-        dateStart = shellyTime.slice(0, 10) + "T22:00Z";
-        dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
-        // Let's make proper date format of getting wether forecast
-        weatherDate = shellyTimePlus1.slice(0, 10);
+    // Let's prepare proper date-time formats for Elering query
+    dateStart = shellyTime.slice(0, 10) + "T22:00Z";
+    dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
+    // Let's make proper date format of getting wether forecast
+    weatherDate = shellyTimePlus1.slice(0, 10);
 
-        // Let's call Open-Meteo weather forecast API to get tomorrow min and max temperatures
-        print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
-        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, function (response) {
-            if (response === null || JSON.parse(response.body)["error"]) {
-                print("Getting temperature failed. Using default heatingTime parameter and will turn on heating fot ", heatingTime, " hours.");
-            }
-            else {
-                let json = JSON.parse(response.body);
-                // This is very simple way for temperature forecast, just averaging tomorrow min and max temperatures :) 
-                let avgTempForecast = (json["daily"]["temperature_2m_max"][0] + json["daily"]["temperature_2m_min"][0]) / 2;
-                // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
-                heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
-                heatingTime = Math.ceil(heatingTime);
-                if (heatingTime > 20) { heatingTime = 20; }
-                print("Temperture forecast tomorrow", weatherDate, " is ", avgTempForecast, " heating is turned on for ", heatingTime, " hours.");
-            }
-            find_cheapest();
+    // Let's call Open-Meteo weather forecast API to get tomorrow min and max temperatures
+    print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
+    Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, function (response) {
+        if (response === null || JSON.parse(response.body)["error"]) {
+            print("Getting temperature failed. Using default heatingTime parameter and will turn on heating fot ", heatingTime, " hours.");
         }
-        );
+        else {
+            let json = JSON.parse(response.body);
+            // This is very simple way for temperature forecast, just averaging tomorrow min and max temperatures :) 
+            let avgTempForecast = (json["daily"]["temperature_2m_max"][0] + json["daily"]["temperature_2m_min"][0]) / 2;
+            // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
+            heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
+            heatingTime = Math.ceil(heatingTime);
+            if (heatingTime > 24) { heatingTime = 24; }
+            print("Temperture forecast tomorrow", weatherDate, " is ", avgTempForecast, " heating is turned on for ", heatingTime, " hours.");
+        }
+        find_cheapest();
     }
     );
 }
@@ -150,35 +142,35 @@ function find_cheapest() {
             // The Timers in Shelly script are limited also to 5, as one is used to stop the script itself we can call maximum 4 timers.
             // For some reason I couldn't make this code smarter as calling timers seems not working from for-loop which would be the normal solution.
             if (heatingTime - 4 > 0) {
-                Timer.set(4 * 1000, false, function () {
-                    print("Starting to add hours 4-7");
-                    if (heatingTime - 8 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 8; }
+                Timer.set(5 * 1000, false, function () {
+                    print("Starting to add hours 4-8");
+                    if (heatingTime - 9 < 1) { data_indx = heatingTime; }
+                    else { data_indx = 9; }
                     addSchedules(sorted, 4, data_indx);
                 });
             }
-            if (heatingTime - 8 > 0) {
-                Timer.set(8 * 1000, false, function () {
-                    print("Starting to add hours 8-11");
-                    if (heatingTime - 12 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 12; }
-                    addSchedules(sorted, 8, data_indx);
+            if (heatingTime - 9 > 0) {
+                Timer.set(10 * 1000, false, function () {
+                    print("Starting to add hours 9-13");
+                    if (heatingTime - 14 < 1) { data_indx = heatingTime; }
+                    else { data_indx = 14; }
+                    addSchedules(sorted, 9, data_indx);
                 });
             }
-            if (heatingTime - 12 > 0) {
-                Timer.set(12 * 1000, false, function () {
-                    print("Starting to add hours 12-15");
-                    if (heatingTime - 16 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 16; }
-                    addSchedules(sorted, 12, data_indx);
+            if (heatingTime - 14 > 0) {
+                Timer.set(15 * 1000, false, function () {
+                    print("Starting to add hours 14-19");
+                    if (heatingTime - 19 < 1) { data_indx = heatingTime; }
+                    else { data_indx = 19; }
+                    addSchedules(sorted, 14, data_indx);
                 });
             }
-            if (heatingTime - 16 > 0) {
+            if (heatingTime - 19 > 0) {
                 Timer.set(20 * 1000, false, function () {
-                    print("Starting to add hours 16-19");
-                    if (heatingTime - 20 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 20; }
-                    addSchedules(sorted, 16, data_indx);
+                    print("Starting to add hours 19-23");
+                    if (heatingTime - 24 < 1) { data_indx = heatingTime; }
+                    else { data_indx = 24; }
+                    addSchedules(sorted, 19, data_indx);
                 });
             }
         }
@@ -407,8 +399,11 @@ function scheduleScript() {
             }
         }]
     })
-    // Stop this script in one minute from now
-    Timer.set(60 * 1000, false, function () {
+}
+
+function stopScript() {
+    // Stop this script in 1.5 minute from now
+    Timer.set(100 * 1000, false, function () {
         print("Stopping the script ...");
         Shelly.call("Script.stop", { "id": script_number });
     });
@@ -418,3 +413,4 @@ deleteSchedulers();
 getShellyStatus();
 setTimer(is_reverse, 1);
 scheduleScript();
+stopScript();

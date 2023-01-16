@@ -1,13 +1,13 @@
 # Smart heating management with Shelly
 
 ## What does this script doing?
-This script is calculating required heating time based on [weather forecast](https://open-meteo.com/), and turn on your heating system for cheapest hours in a day based on [electricity market price](https://dashboard.elering.ee/et/nps/price).
+This script is calculating required heating time based on [weather forecast](https://open-meteo.com/), and turns on your heating system for cheapest hours in a day based on [electricity market price](https://dashboard.elering.ee/et/nps/price).
 
 It's scheduled to run daily after 23:00 to set heating schedule for next day.
 
-This script is works with [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) which supports scripting.
+This script works with [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) which supports scripting.
 
-This script is depends on two services:
+This script depends on two services:
 * electricity market price from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET),
 * weather forecast from [Open-Meteo API](https://open-meteo.com/en/docs).
 
@@ -30,23 +30,23 @@ Electicity price can vary sometimes 100 times during a day. Check  [electricity 
 > You will only benefit in case of having hourly priced energy contract. If your energy contract has one flat rate, then this solution will not help to redure your energy bill.
 
 This will work for Estonia-ee, Finland-fi, Lthuania-lt and Latvia-lv.
-No other countries electricity market price exist in Elering API.
+Electricity market prices for other countries do not exist in Elering API.
 
 Set your country parameter ``country = "ee"``.
 
-## Why the heating hours is based on weather forecast?
+## Why the heating hours are based on weather forecast?
 
-If outside temperature +20 degrees, you don't need heating. This is so true.
+If outside temperature is +20 degrees, you don't need heating. This is so true.
 
 If temperature is -5 degrees you need some heating but for -20 degrees you need much more heating. This is also true.
 
-Now you got why weather forecast is very important to calculate next day heating time. This is a smart way to manage heating system.
+Now you got why weather forecast is very important for calculating next day heating time. This is a smart way to manage heating system.
 
 To get your home weather forecast, location data is needed. 
 
 **IMPORTANT**
 
-> Please makse sure your Shelly device has correct location. Shelly - Settings - Geolocation - Latitude/Longitude.
+> Please make sure your Shelly device has correct location. Shelly - Settings - Geolocation - Latitude/Longitude.
 
 > Shelly location is based on your internet provider IP-address and it is very likely not your home location.
 
@@ -56,15 +56,15 @@ Copy values from latitude and longitude fields and put them into googl maps to k
 
 <img src="images/checklocation.jpg" alt="Check location" width="500">
 
-If you are not saticfied with the Shelly identified location then put a pin into googl maps, copy latitude/longitude and overwrite your Shelly location.
+If you are not satisfied with the Shelly identified location then put a pin into googl maps, copy latitude/longitude and overwrite your Shelly location.
 
 <img src="images/locationdata.jpg" alt="Find location data with googl maps" width="500">
 
 The temperature and heating time relationship is called **heating curve**.
 
-## How the heating curve is looks like?
+## How the heating curve looks like?
 
-Heating time is based on your household insulation. For example an old and not insulated house need 10 h heating if outside is -5 degrees, while new A-class house might need only 4 hours.
+Heating time is based on your household insulation. For example an old and not insulated house needs 10 h heating if outside is -5 degrees, while new A-class house might need only 4 hours.
 
 This is the reason the scipt has parameter ``heatingCurve`` which is used to set the best heating curve for each household.  
 

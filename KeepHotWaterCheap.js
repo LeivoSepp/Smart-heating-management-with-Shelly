@@ -1,25 +1,20 @@
-// This script is calculating next day heating time based on weather forecast, 
-// and turn on your heating system for cheapest hours based on electricity market price.
+// This script divides day to heating windows, finds cheapest hour for each window, and turns on your (water)heating in that time.
 
-// It's scheduled to run daily after 23:00 to set heating timeslots for next day.
-// by Leivo Sepp, 14.01.2023
+// It's scheduled to run daily after 23:00 to set heating windows for next day.
+// by Leivo Sepp, 31.01.2023
 // Energy Market price is downloaded from Elering API https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET. 
 
 // Set the country Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv
 // No other countries support exist trough Elering API. 
 let country = "ee";
 
-// This parameter used to set a number of heating hours in a day in case the weather forecast fails. Number 1-24. 
-// If Shelly was able to get the forecast, then this number is owerwritten by the heating curve calculation.
-// For example if this number is set to 5 then Shelly will be turned on for 5 most cheapest hours during a day. 
-// If the cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then the Shelly is turned on 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
-let heatingTime = 2;
-
+// This parameter used to set heating window hours. In normal cases I would recommend to set it between 4 to 8, bat can be 1-24 (24 is useless).
+// If this number is 6, then heating windows are 00-05, 06-11, 12-17, 18-23. Inside of each heating window the script finds chepest prices depends on the next heatingTime parameter.
 let heatingWindow = 10;
 
-// If getting electricity prices from Elering fails, then use this number as a time to start Shelly. 2 means 02:00. 
-// For example if there is no internet connection at all, and heatingTime=5, default_start_time=1 then the Shelly is turned on from 01:00 to 06:00
-let default_start_time = 1;
+// This parameter used to set a number of heating hours in a heating window. In normal cases it should 1 or 2 hours, but can be also bigger number.
+// For example if this number is set to 1 then Shelly will be turned on for 1 hour for each heating window. 
+let heatingTime = 2;
 
 // Keep this is_reverse value "false", I think 99% of the situations are required so.
 // Rarely some heating systems requires reversed relay. Put this "true" if you are sure that your appliance requires so.
@@ -39,6 +34,7 @@ let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
 let totalHours;
 let waterHeatingTimes = [];
 let data_indx;
+let countWindows = 24 / heatingWindow;
 
 // Crontab for running this script. 
 // This script is run at random moment during the first 15 minutes after 23:00
@@ -72,8 +68,16 @@ function find_cheapest() {
         if (result === null) {
             // If there is no result, then use the default_start_time and heatingTime
             print("Fetching market prices failed. Adding one big timeslot.");
-            setTimer(is_reverse, heatingTime);
+            // setTimer(is_reverse, heatingTime);
             //            addSchedules(sorted, default_start_time, default_start_time + 1);
+            for(let i = 0; i<countWindows; i++)
+            {
+                let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
+                let year = dateTime
+                waterHeatingTimes[i].timestamp = 
+
+            }
+
         }
         else {
             // Let's hope we got good JSON result and we can proceed normally
@@ -85,7 +89,7 @@ function find_cheapest() {
             let pricesArray = json["data"][country];
 
             let arrayRange = [];
-            let countWindows = 24 / heatingWindow;
+
 
             for (let i = 0; i < countWindows; i++) {
                 let k = 0;
@@ -175,6 +179,20 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
         }
         )
     }
+}
+
+function dateTimeToUnixTime(y, m, d, H, M) {
+    /* https://github.com/protocolbuffers/upb/blob/22182e6e/upb/json_decode.c#L982
+     * dateTimeToUnixTime(1970, 1, 1, 0, 0) == 1970-01-01 00:00 */
+    let year_base = 4800;
+    let m_adj = m - 3;       /* March-based month. */
+    let carry = m_adj > m ? 1 : 0;
+    let adjust = carry ? 12 : 0;
+    let y_adj = y + year_base - carry;
+    let month_days = ((m_adj + adjust) * 62719 + 769) / 2048;
+    let leap_days = y_adj / 4 - y_adj / 100 + y_adj / 400;
+    let date_days = y_adj * 365 + leap_days + month_days + (d - 1) - 2472632;
+    return date_days * 86400 + H * 3600 + M * 60;
 }
 
 // Shelly doesn't support any date-time management.

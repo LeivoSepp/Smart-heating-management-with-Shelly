@@ -15,7 +15,7 @@ let country = "ee";
 // If the cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then the Shelly is turned on 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
 let heatingTime = 2;
 
-let heatingWindow = 4;
+let heatingWindow = 10;
 
 // If getting electricity prices from Elering fails, then use this number as a time to start Shelly. 2 means 02:00. 
 // For example if there is no internet connection at all, and heatingTime=5, default_start_time=1 then the Shelly is turned on from 01:00 to 06:00
@@ -32,13 +32,13 @@ let timezone = 2;
 
 // some global variables
 let eleringUrl = "https://dashboard.elering.ee/api/nps/price";
-let data_indx;
 let sorted = [];
 let dateStart;
 let dateEnd;
 let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
 let totalHours;
 let waterHeatingTimes = [];
+let data_indx;
 
 // Crontab for running this script. 
 // This script is run at random moment during the first 15 minutes after 23:00
@@ -50,7 +50,6 @@ let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,TH
 // Number for this script. If this doesn't work (as in earlier versions), get it from this url (use your own ip) http://192.168.33.1/rpc/Script.List
 // You can check the schedules here (use your own ip) http://192.168.33.1/rpc/Schedule.List
 let script_number = Shelly.getCurrentScriptId();
-
 
 // This is the main function to proceed with the price sorting etc.
 function find_cheapest() {
@@ -87,27 +86,27 @@ function find_cheapest() {
 
             let arrayRange = [];
             let countWindows = 24 / heatingWindow;
+
             for (let i = 0; i < countWindows; i++) {
-
                 let k = 0;
-                for (let j = i * heatingWindow; j < (i + 1) * heatingWindow; j++) {
-
+                let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
+                for (let j = i * heatingWindow; j < hoursInWindow; j++) {
                     arrayRange[k] = pricesArray[j];
                     k++;
                 }
                 // Sort prices from smallest to largest
                 sorted = sort(arrayRange, "price");
 
-                for (let x = 0; x < heatingTime; x++) {
+                let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
+                for (let x = 0; x < heatingHours; x++) {
                     waterHeatingTimes[(i * heatingTime) + x] = sorted[x];
                 }
             }
             totalHours = waterHeatingTimes.length;
             // // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
             // // These 4 RPC calls are used here. 
-            if (totalHours - 4 < 1) { data_indx = totalHours; }
-            else { data_indx = 4; }
-            print("Starting to add hours 0-3");
+            data_indx = (totalHours - 4) < 1 ? totalHours : 4;
+            print("Starting to add hours 0-3", data_indx);
             addSchedules(waterHeatingTimes, 0, data_indx);
 
             // // This is the hack with the timers to add more RPC calls. We simply add a 4 second delay between the timer actions :) 
@@ -116,33 +115,29 @@ function find_cheapest() {
             // // For some reason I couldn't make this code smarter as calling timers seems not working from for-loop which would be the normal solution.
             if (totalHours - 4 > 0) {
                 Timer.set(5 * 1000, false, function () {
-                    print("Starting to add hours 4-8");
-                    if (totalHours - 9 < 1) { data_indx = totalHours; }
-                    else { data_indx = 9; }
+                    data_indx = (totalHours - 9) < 1 ? totalHours : 9;
+                    print("Starting to add hours 4-8", data_indx);
                     addSchedules(waterHeatingTimes, 4, data_indx);
                 });
             }
             if (totalHours - 9 > 0) {
                 Timer.set(10 * 1000, false, function () {
                     print("Starting to add hours 9-13");
-                    if (totalHours - 14 < 1) { data_indx = totalHours; }
-                    else { data_indx = 14; }
+                    data_indx = (totalHours - 14) < 1 ? totalHours : 14;
                     addSchedules(waterHeatingTimes, 9, data_indx);
                 });
             }
             if (heatingTime - 14 > 0) {
                 Timer.set(15 * 1000, false, function () {
                     print("Starting to add hours 14-19");
-                    if (heatingTime - 19 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 19; }
+                    data_indx = (totalHours - 19) < 1 ? totalHours : 19;
                     addSchedules(sorted, 14, data_indx);
                 });
             }
             if (heatingTime - 19 > 0) {
                 Timer.set(20 * 1000, false, function () {
                     print("Starting to add hours 19-23");
-                    if (heatingTime - 24 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 24; }
+                    data_indx = (totalHours - 24) < 1 ? totalHours : 24;
                     addSchedules(sorted, 19, data_indx);
                 });
             }
@@ -274,12 +269,11 @@ function unixTimeToHumanReadable(seconds, timezone, addDay) {
     minutes = Math.floor((extraTime % 3600) / 60);
     secondss = Math.floor((extraTime % 3600) % 60);
     //add leading 0 to month, date, hour, minute, and seconds
-    let monthStr, dateStr, hoursStr, minutesStr, secondsStr;
-    if (month < 10) { monthStr = "0" + JSON.stringify(month); } else { monthStr = JSON.stringify(month); }
-    if (date < 10) { dateStr = "0" + JSON.stringify(date); } else { dateStr = JSON.stringify(date); }
-    if (hours < 10) { hoursStr = "0" + JSON.stringify(hours); } else { hoursStr = JSON.stringify(hours); }
-    if (minutes < 10) { minutesStr = "0" + JSON.stringify(minutes); } else { minutesStr = JSON.stringify(minutes); }
-    if (secondss < 10) { secondsStr = "0" + JSON.stringify(secondss); } else { secondsStr = JSON.stringify(secondss); }
+    let monthStr = month < 10 ? "0" + JSON.stringify(month) : JSON.stringify(month);
+    let dateStr = date < 10 ? "0" + JSON.stringify(date) : JSON.stringify(date);
+    let hoursStr = hours < 10 ? "0" + JSON.stringify(hours) : JSON.stringify(hours);
+    let minutesStr = minutes < 10 ? "0" + JSON.stringify(minutes) : JSON.stringify(minutes);
+    let secondsStr = secondss < 10 ? "0" + JSON.stringify(secondss) : JSON.stringify(secondss);
 
     ans += JSON.stringify(currYear);
     ans += "-";
@@ -344,9 +338,7 @@ function deleteSchedulers() {
 // Auto_on or auto_off is depends on the "is_reverse" parameter
 // Delay_hour is the time period in hour. Shelly will translate this to seconds.
 function setTimer(is_reverse, delay_hour) {
-    let is_on;
-    if (is_reverse) { is_on = "on" }
-    else { is_on = "off" }
+    let is_on = is_reverse ? "on" : "off";
     print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");
     Shelly.call("Switch.SetConfig", {
         "id": 0,

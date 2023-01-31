@@ -26,7 +26,7 @@ let is_reverse = false;
 let timezone = 2;
 
 // some global variables
-let eleringUrl = "https://dashboard.elering.ee/api/nps/price";
+let eleringUrl = "https://dashboard.elering.e/api/nps/price";
 let sorted = [];
 let dateStart;
 let dateEnd;
@@ -70,11 +70,19 @@ function find_cheapest() {
             print("Fetching market prices failed. Adding one big timeslot.");
             // setTimer(is_reverse, heatingTime);
             //            addSchedules(sorted, default_start_time, default_start_time + 1);
-            for(let i = 0; i<countWindows; i++)
-            {
+            for (let i = 0; i < countWindows; i++) {
+                //1970-01-01 00:00
                 let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
-                let year = dateTime
-                waterHeatingTimes[i].timestamp = 
+                let year = JSON.parse(dateTime.slice(0, 4));
+                let month = JSON.parse(dateTime.slice(5, 7));
+                let date = JSON.parse(dateTime.slice(8, 10));
+                //remove leading zeros
+                print(dateTime);
+                let unixtime = dateTimeToUnixTime(year, month, date, i * heatingWindow, 0);
+
+                waterHeatingTimes[i].timestamp = unixtime;
+                print(JSON.stringify(unixtime));
+                print(unixTimeToHumanReadable(unixtime, timezone, 0));
 
             }
 

@@ -263,8 +263,7 @@ function unixTimeToHumanReadable(seconds, timezone, addDay) {
                 extraDays -= 29;
             }
             else {
-                if (extraDays -
-                    daysOfMonth[index] < 0) {
+                if (extraDays - daysOfMonth[index] <= 0) {
                     break;
                 }
                 month += 1;
@@ -275,7 +274,7 @@ function unixTimeToHumanReadable(seconds, timezone, addDay) {
     }
     else {
         while (true) {
-            if (extraDays - daysOfMonth[index] < 0) {
+            if (extraDays - daysOfMonth[index] <= 0) {
                 break;
             }
             month += 1;

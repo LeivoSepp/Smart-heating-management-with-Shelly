@@ -1,4 +1,4 @@
-// This script divides day to heating windows, finds cheapest hour for each window, and turns on your (water)heating in that time.
+// This script divides day to heating windows, finds cheapest hour from each window, and turns on your (water)heating for that time.
 
 // It's scheduled to run daily after 23:00 to set heating windows for next day.
 // by Leivo Sepp, 31.01.2023

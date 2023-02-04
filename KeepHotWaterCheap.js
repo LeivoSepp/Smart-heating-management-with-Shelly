@@ -1,4 +1,4 @@
-// This script divides day to heating windows, finds cheapest hour from each window, and turns on your (water)heating for that time.
+// This script divides day into heating windows, finds cheapest hour(s) from each window, and turns on your (water)heating for that time.
 
 // It's scheduled to run daily after 23:00 to set heating windows for next day.
 // by Leivo Sepp, 31.01.2023
@@ -8,17 +8,17 @@
 // No other countries support exist trough Elering API. 
 let country = "ee";
 
-// This parameter used to set heating window hours. In normal cases I would recommend to set it between 4 to 8, bat can be 1-24 (24 is useless).
-// If this number is 6, then heating windows are 00-05, 06-11, 12-17, 18-23. Inside of each heating window the script finds chepest prices depends on the next heatingTime parameter.
+// This parameter used to set length in hours for heating window. In normal cases I would recommend to set it between 4 to 8, bat can be 1-24 (24 is useless).
+// Example: If heatingWindow=6, then heating windows are 00-05, 06-11, 12-17, 18-23. Inside of each heating window the script finds chepest prices depends on the next heatingTime parameter.
 let heatingWindow = 6;
 
-// This parameter used to set a number of heating hours in a heating window. In normal cases it should 1 or 2 hours, but can be also bigger number.
-// For example if this number is set to 1 then Shelly will be turned on for 1 hour for each heating window. 
+// This parameter used to set number of heating hours inside heating window. In normal cases it should 1 or 2 hours, but can also be bigger number.
+// For example if this number is set to 1 then Shelly will turn on for 1 hour for each heating window. 
 let heatingTime = 1;
 
-// Keep this is_reverse value "false", I think 99% of the situations are required so.
+// Keep this parameter is_reverse=false, I think 99% of the situations are required so.
 // Rarely some heating systems requires reversed relay. Put this "true" if you are sure that your appliance requires so.
-// For example my personal ground source heat pump requires reversed management. If Shelly relay is activated (ON), then the pump is turned off.
+// For example my personal ground source heat pump requires reversed management. If Shelly relay is activated (ON), then my heatpump is turned off.
 let is_reverse = false;
 
 // This is timezone for EE, LT, LV and FI.
@@ -51,32 +51,33 @@ let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,TH
 // You can check the schedules here (use your own ip) http://192.168.33.1/rpc/Schedule.List
 let script_number = Shelly.getCurrentScriptId();
 
-// This is the main function to proceed with the price sorting etc.
+// This is the main function to proceed with data management, price sorting etc.
 function find_cheapest() {
     let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
     let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
     // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
+    // Running this script before 3PM, today energy prices are used.
     if (shellyHour >= 15) {
         addDays = 0
     }
+    // Let's prepare proper date-time formats for Elering query
     let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
     let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
+    dateStart = shellyTime.slice(0, 10) + "T22:00Z";
+    dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
 
+    // Extract Shelly year, month and day
     let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
     year = JSON.parse(dateTime.slice(0, 4));
     month = JSON.parse(dateTime.slice(5, 7));
     date = JSON.parse(dateTime.slice(8, 10));
 
-    // Let's prepare proper date-time formats for Elering query
-    dateStart = shellyTime.slice(0, 10) + "T22:00Z";
-    dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
-
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
     Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd }, function (result) {
         if (result === null) {
-            // If there is no result, then use the default_start_time and heatingTime
-            print("Fetching market prices failed. Adding default timeslots.");
+            // If there is no result, then heating windows are starting exactly at midnight 00:00
+            print("Fetching market prices failed. Adding default heating windows.");
             setTimer(is_reverse, heatingTime);
             for (let i = 0; i < countWindows; i++) {
                 let unixtime = dateTimeToUnixTime(year, month, date, (i * heatingWindow) - 2, 0);
@@ -89,12 +90,12 @@ function find_cheapest() {
             // Example of good json
             // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
             // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
-            print("We got market prices, going to sort them from cheapest to most expensive ...");
+            print("We got market prices from Elering, going to do the heating window logic ...");
             let json = JSON.parse(result.body);
             let pricesArray = json["data"][country];
 
             let arrayWindow = [];
-            // Creating array for each window, sorting, and pushing smallest prices to waterHeatingTimes[] 
+            // Creating array for each heating window, sorting array, and then pushing smallest prices to waterHeatingTimes[] 
             for (let i = 0; i < countWindows; i++) {
                 let k = 0;
                 let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
@@ -203,8 +204,7 @@ function unixTimeToHumanReadable(seconds, timezone, addDay) {
     // Save the time in Human readable format
     let ans = "";
     // Number of days in month in normal year
-    let daysOfMonth = [31, 28, 31, 30, 31, 30,
-        31, 31, 30, 31, 30, 31];
+    let daysOfMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let currYear, daysTillNow, extraTime,
         extraDays, index, date, month, hours,
         minutes, secondss, flag = 0;
@@ -242,7 +242,6 @@ function unixTimeToHumanReadable(seconds, timezone, addDay) {
             if (index === 1) {
                 if (extraDays - 29 < 0)
                     break;
-
                 month += 1;
                 extraDays -= 29;
             }
@@ -349,9 +348,9 @@ function deleteSchedulers() {
     Shelly.call("Schedule.DeleteAll");
 }
 
-// Set automatic one hour countdown timer to flip the Shelly status
+// Set countdown timer to flip the Shelly status
 // Auto_on or auto_off is depends on the "is_reverse" parameter
-// Delay_hour is the time period in hour. Shelly will translate this to seconds.
+// Delay_hour is the time period in hour. Shelly needs this in seconds.
 function setTimer(is_reverse, delay_hour) {
     let is_on = is_reverse ? "on" : "off";
     print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");

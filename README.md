@@ -160,7 +160,7 @@ This script depends on the [Elering API](https://dashboard.elering.ee/assets/api
 1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
 2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
 3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
-4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js) and paste it to Shelly scripting window.
+4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/HeatingWindows.js) and paste it to Shelly scripting window.
 5. Configure required parameters:
     - Set the country code. Possible values: Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv. ``country = "ee"``
     - Set the length of heating window in hours. In normal cases I would recommend to set it between 4 to 8, but can be 1-24 (24 is useless). ``heatingWindow = 5``

@@ -1,7 +1,28 @@
 # Smart heating management with Shelly
 
-## What does this script doing?
+Smart heating can be based on different algorithms. There are two of them used by myself:
+1. Full day heating, weather forecast and electricity market price. [1. Full Day Heating](#1-full-day-heating)
+2. Many heating windows and electricity market price. [2. Heating Windows](#2-heating-windows)
+
+Whats the difference between these algorithms?
+
+|Feature|Full day heating|Heating windows|
+|---|---|---|
+|Best usage|Floor heating, big water tank or other sources which can store the energy for longer time.|Air source heat pumps, water heating or other places where heating required in regular basis.|
+|How it works?|Heating time is based on weather forecast and then cheapest hours chosen from the day for heating.|Day is divided into many heating window and cheapest hour from each window is used for heating.|
+|Example|<img src="images/smartheating.jpg" alt="Full day heating" width="400">|<img src="images/HeatingWindow.jpg" alt="Heating windows" width="400">|
+|Pros|Biggest money saving.|Smoother heating.|
+|Cons|The time between heating hours can be too long and it might not OK for water heating.|In the middle of the day the hours can be very expensive and this decrease your savings.|
+||||
+
+<br/><br/>
+
+# 1. Full day heating
+
+## 1.1 What does this script doing?
 This script is calculating required heating time based on [weather forecast](https://open-meteo.com/), and turns on your heating system for cheapest hours in a day based on [electricity market price](https://dashboard.elering.ee/et/nps/price).
+
+<img src="images/smartheating.jpg" alt="Full day heating" width="400">
 
 It's scheduled to run daily after 23:00 to set heating schedule for next day.
 
@@ -11,7 +32,7 @@ This script depends on two services:
 * electricity market price from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET),
 * weather forecast from [Open-Meteo API](https://open-meteo.com/en/docs).
 
-## Does it really reduce my electric bills?
+## 1.2 Does it really reduce my electric bills?
 
 Short answer: yes.
 
@@ -34,7 +55,7 @@ Electricity market prices for other countries do not exist in Elering API.
 
 Set your country parameter ``country = "ee"``.
 
-## Why the heating hours are based on weather forecast?
+## 1.3 Why the heating hours are based on weather forecast?
 
 If outside temperature is +20 degrees, you don't need heating. This is so true.
 
@@ -62,7 +83,7 @@ If you are not satisfied with the Shelly identified location then put a pin into
 
 The temperature and heating time relationship is called **heating curve**.
 
-## How the heating curve looks like?
+## 1.4 How the heating curve looks like?
 
 Heating time is based on your household insulation. For example an old and not insulated house needs 10 h heating if outside is -5 degrees, while new A-class house might need only 4 hours.
 
@@ -85,7 +106,7 @@ If you like math, then this is the quadratic equation to calculate heating time:
 
 You can build your own heating curve equation if you feel comfortable to do so.
 
-## How to use this script?
+## 1.5 How to use this script?
 
 1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
 2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
@@ -100,7 +121,57 @@ You can build your own heating curve equation if you feel comfortable to do so.
     - Set relay mode - normal or reversed. Values true/false. ``is_reverse = false``. 99% of the cases this parameter should be false. Don't change it.
 7. Click "Save" and "Start". 
 
-## How to add script into Shelly
+## 1.6 How this script works?
+
+1. This script requires internet connection to download daily basis electricity market prices and weather forecast.
+2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
+3. The script follows this flowchart.
+
+```mermaid
+flowchart TD
+    0[Start] --> A
+    A[Get Shelly time and location] --> B{Get weather forecast <br> from Open-Meteo.com API}
+    B -- Succeeded --> C[Calculate heating time]
+    C --> D{Get electricity market price <br> from Elering API}
+    B -- Failed --> E[Use default heating time]
+    E --> D
+    D -- Succeeded --> F[Create hourly schedules]
+    D -- Failed --> G[Create one big heating time]
+    F --> H[Finish]
+    G --> H
+```
+<br/><br/>
+
+# 2. Heating Windows
+
+## 2.1 What does this script doing?
+This script divides day into heating windows, finds cheapest hour(s) from each window, and turns on heating for that time.
+
+<img src="images/HeatingWindow.jpg" alt="Heating windows" width="400">
+
+It's scheduled to run daily after 23:00 to set heating schedule for next day.
+
+This script works with [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/) which supports scripting.
+
+This script depends on the [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET), to get electricity market price.
+
+## 2.2 How to use this script?
+
+1. Go and buy any [Shelly Pro/Plus devices](https://www.shelly.cloud/en-ee/products/). Shelly device must be a [Gen 2 device](https://shelly-api-docs.shelly.cloud/gen2/) to support scripting. Let's make it simple, the name must contain *Plus* or *Pro*. 
+2. Connect Shelly device to WiFi network. [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
+3. Find Shelly IP address and go to page (put your own IP address) http://192.168.33.1/#/script/1
+4. Add script, just copy the [script](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js) and paste it to Shelly scripting window.
+5. Configure required parameters:
+    - Set the country code. Possible values: Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv. ``country = "ee"``
+    - Set the length of heating window in hours. In normal cases I would recommend to set it between 4 to 8, but can be 1-24 (24 is useless). ``heatingWindow = 5``
+    - Set the number of heating hours inside of each heating window. In normal cases it should 1 or 2 hours, but can also be bigger number. ``heatingTime = 1``
+6. Configure optional parameters:
+    - Set relay mode - normal or reversed. Values true/false. ``is_reverse = false``. 99% of the cases this parameter should be false. Don't change it.
+7. Click "Save" and "Start". 
+
+<br/><br/>
+
+# 3. How to add script into Shelly
 
 Shelly IP address can be found under Setting - Device Information - Device IP. Just click on the IP address and new Shely window will open.
 
@@ -123,7 +194,7 @@ Shelly IP address can be found under Setting - Device Information - Device IP. J
 
 <img src="images/AddScript3.jpg" alt="Enable script" width="400">
 
-## How can I see the outcome?
+## 4. How can I see the outcome?
 
 In Shelly page click "Home" and then click "Switch0" and then find "Schedules" and "Timers".
 
@@ -133,22 +204,3 @@ The schedulers can be seen also in page https://home.shelly.cloud/.
 
 <img src="images/CheckSchedules2.jpg" alt="Check schedules" width="400">
 
-## How this script works?
-
-1. This script requires internet connection to download daily basis electricity market prices and weather forecast.
-2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
-3. The script follows this flowchart.
-
-```mermaid
-flowchart TD
-    0[Start] --> A
-    A[Get Shelly time and location] --> B{Get weather forecast <br> from Open-Meteo.com API}
-    B -- Succeeded --> C[Calculate heating time]
-    C --> D{Get electricity market price <br> from Elering API}
-    B -- Failed --> E[Use default heating time]
-    E --> D
-    D -- Succeeded --> F[Create hourly schedules]
-    D -- Failed --> G[Create one big heating time]
-    F --> H[Finish]
-    G --> H
-```

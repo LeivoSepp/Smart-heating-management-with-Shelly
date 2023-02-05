@@ -8,7 +8,7 @@
 // No other countries support exist trough Elering API. 
 let country = "ee";
 
-// This parameter used to set length in hours for heating window. In normal cases I would recommend to set it between 4 to 8, bat can be 1-24 (24 is useless).
+// This parameter used to set length in hours for heating window. In normal cases I would recommend to set it between 4 to 8, but can be 1-24 (24 is useless).
 // Example: If heatingWindow=6, then heating windows are 00-05, 06-11, 12-17, 18-23. Inside of each heating window the script finds chepest prices depends on the next heatingTime parameter.
 let heatingWindow = 6;
 

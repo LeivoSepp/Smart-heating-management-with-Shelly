@@ -22,7 +22,7 @@ Whats the difference between these algorithms?
 ## 1.1 What does this script doing?
 This script is calculating required heating time based on [weather forecast](https://open-meteo.com/), and turns on your heating system for cheapest hours in a day based on [electricity market price](https://dashboard.elering.ee/et/nps/price).
 
-<img src="images/smartheating.jpg" alt="Full day heating" width="400">
+<img src="images/smartheating.jpg" alt="Full day heating" width="700">
 
 It's scheduled to run daily after 23:00 to set heating schedule for next day.
 
@@ -147,7 +147,7 @@ flowchart TD
 ## 2.1 What does this script doing?
 This script divides day into heating windows, finds cheapest hour(s) from each window, and turns on heating for that time.
 
-<img src="images/HeatingWindow.jpg" alt="Heating windows" width="400">
+<img src="images/HeatingWindow.jpg" alt="Heating windows" width="750">
 
 It's scheduled to run daily after 23:00 to set heating schedule for next day.
 

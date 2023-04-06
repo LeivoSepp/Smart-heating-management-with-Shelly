@@ -385,7 +385,6 @@ function deleteSchedulers() {
 // Set countdown timer to flip the Shelly status
 // Auto_on or auto_off is depends on the "is_reverse" parameter
 // Delay_hour is the time period in hour. Shelly needs this in seconds.
-// Added 1 second to avoid unnecessary on-off for continous hours
 function setTimer(is_reverse, delay_hour) {
     let is_on = is_reverse ? "on" : "off";
     print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");
@@ -394,9 +393,9 @@ function setTimer(is_reverse, delay_hour) {
         config: {
             "name": "Switch0",
             "auto_on": is_reverse,
-            "auto_on_delay": (delay_hour * 60 * 60) + 1,
+            "auto_on_delay": delay_hour * 60 * 60,
             "auto_off": !is_reverse,
-            "auto_off_delay": (delay_hour * 60 * 60) + 1
+            "auto_off_delay": delay_hour * 60 * 60
         }
     }
     )

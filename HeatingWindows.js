@@ -31,6 +31,7 @@ let sorted = [];
 let dateStart;
 let dateEnd;
 let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
+
 let totalHours;
 let waterHeatingTimes = [];
 let data_indx;
@@ -53,24 +54,35 @@ let script_number = Shelly.getCurrentScriptId();
 
 // This is the main function to proceed with data management, price sorting etc.
 function find_cheapest() {
-    let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
-    let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
-    // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
-    // Running this script before 3PM, today energy prices are used.
-    if (shellyHour >= 15) {
-        addDays = 0
-    }
-    // Let's prepare proper date-time formats for Elering query
-    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
-    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
-    dateStart = shellyTime.slice(0, 10) + "T22:00Z";
-    dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
+    //test some custom date
+    //shellyUnixtime = dateTimeToUnixTime(2023, 2, 1, 12, 0);
 
     // Extract Shelly year, month and day
     let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
     year = JSON.parse(dateTime.slice(0, 4));
     month = JSON.parse(dateTime.slice(5, 7));
     date = JSON.parse(dateTime.slice(8, 10));
+
+    let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
+
+    //If it is daylight time, then add proper hours for Elering query 
+    let IsDaylight = IsDST(date, month, dayofweek(year, month, date));
+    timezone = IsDaylight ? 3 : 2;
+    // Let's prepare proper date-time formats for Elering query
+    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
+    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
+    dateStart = shellyTime.slice(0, 10);
+    dateEnd = shellyTimePlus1.slice(0, 10);
+
+    dateStart = IsDaylight ? dateStart + "T21:00Z" : dateStart + "T22:00Z";
+    dateEnd = IsDaylight ? dateEnd + "T20:00Z" : dateEnd + "T21:00Z";
+
+    let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
+    // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
+    // Running this script before 3PM, today energy prices are used.
+    if (shellyHour >= 15) {
+        addDays = 0
+    }
 
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
@@ -130,21 +142,21 @@ function find_cheapest() {
             });
         }
         if (totalHours - 9 > 0) {
-            Timer.set(10 * 1000, false, function () {
+            Timer.set(12 * 1000, false, function () {
                 data_indx = (totalHours - 14) < 1 ? totalHours : 14;
                 print("Starting to add hours 9-13");
                 addSchedules(waterHeatingTimes, 9, data_indx);
             });
         }
         if (totalHours - 14 > 0) {
-            Timer.set(15 * 1000, false, function () {
+            Timer.set(19 * 1000, false, function () {
                 data_indx = (totalHours - 19) < 1 ? totalHours : 19;
                 print("Starting to add hours 14-19");
                 addSchedules(waterHeatingTimes, 14, data_indx);
             });
         }
         if (totalHours - 19 > 0) {
-            Timer.set(20 * 1000, false, function () {
+            Timer.set(26 * 1000, false, function () {
                 data_indx = (totalHours - 24) < 1 ? totalHours : 24;
                 print("Starting to add hours 19-23");
                 addSchedules(waterHeatingTimes, 19, data_indx);
@@ -158,7 +170,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
         let hour, price;
         if (sorted_prices.length > 0) {
-            hour = unixTimeToHumanReadable(sorted_prices[i].timestamp, 2, 0).slice(11, 13);
+            hour = unixTimeToHumanReadable(sorted_prices[i].timestamp, timezone, 0).slice(11, 13);
             price = sorted_prices[i].price;
         }
         else {
@@ -192,6 +204,28 @@ function dateTimeToUnixTime(year, month, day, hh, mm) {
     let leap_days = 1 + Math.floor(febs / 4) - Math.floor(febs / 100) + Math.floor(febs / 400);
     let days = 365 * year_adj + leap_days + month_yday[month - 1] + day - 1;
     return (days - 2472692) * 86400 + hh * 3600 + mm * 60;  /* Adjust to Unix epoch. */
+}
+
+//Find a Day of Week
+/* 0 = Sunday */
+function dayofweek(y, m, d) {
+    let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    if (m < 3) { y-- };
+    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+
+//Find if we have daylight saving time
+function IsDST(day, month, dow) {
+    //January, february, and december are out.
+    if (month < 3 || month > 10) return false;
+    if (month > 3 && month < 10) return true;
+
+    let previousSunday = day - dow;
+
+    if (month === 3) return previousSunday >= 25;
+    if (month === 10) return previousSunday < 25;
+
+    return false; // this line never gonna happend
 }
 
 // Shelly doesn't support any date-time management.
@@ -351,6 +385,7 @@ function deleteSchedulers() {
 // Set countdown timer to flip the Shelly status
 // Auto_on or auto_off is depends on the "is_reverse" parameter
 // Delay_hour is the time period in hour. Shelly needs this in seconds.
+// Added 1 second to avoid unnecessary on-off for continous hours
 function setTimer(is_reverse, delay_hour) {
     let is_on = is_reverse ? "on" : "off";
     print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");
@@ -359,9 +394,9 @@ function setTimer(is_reverse, delay_hour) {
         config: {
             "name": "Switch0",
             "auto_on": is_reverse,
-            "auto_on_delay": delay_hour * 60 * 60,
+            "auto_on_delay": (delay_hour * 60 * 60) + 1,
             "auto_off": !is_reverse,
-            "auto_off_delay": delay_hour * 60 * 60
+            "auto_off_delay": (delay_hour * 60 * 60) + 1
         }
     }
     )

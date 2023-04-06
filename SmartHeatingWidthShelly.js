@@ -54,6 +54,9 @@ let dateEnd;
 let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
 let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
 let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
+let year;
+let month;
+let date;
 
 // Crontab for running this script. 
 // This script is run at random moment during the first 15 minutes after 23:00
@@ -68,18 +71,34 @@ let script_number = Shelly.getCurrentScriptId();
 
 // Let's start with Shelly GetStatus to get location, date and time
 function getShellyStatus() {
+    //test some custom date
+    //shellyUnixtime = dateTimeToUnixTime(2023, 2, 1, 12, 0);
+
+    // Extract Shelly year, month and day
+    let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
+    year = JSON.parse(dateTime.slice(0, 4));
+    month = JSON.parse(dateTime.slice(5, 7));
+    date = JSON.parse(dateTime.slice(8, 10));
+
     let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
+    //If it is daylight time, then add proper hours for Elering query 
+    let IsDaylight = IsDST(date, month, dayofweek(year, month, date));
+    timezone = IsDaylight ? 3 : 2;
+    // Let's prepare proper date-time formats for Elering query
+    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
+    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
+    dateStart = shellyTime.slice(0, 10);
+    dateEnd = shellyTimePlus1.slice(0, 10);
+
+    dateStart = IsDaylight ? dateStart + "T21:00Z" : dateStart + "T22:00Z";
+    dateEnd = IsDaylight ? dateEnd + "T20:00Z" : dateEnd + "T21:00Z";
+
     let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
     // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
     if (shellyHour >= 15) {
         addDays = 0
     }
-    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
-    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
 
-    // Let's prepare proper date-time formats for Elering query
-    dateStart = shellyTime.slice(0, 10) + "T22:00Z";
-    dateEnd = shellyTimePlus1.slice(0, 10) + "T21:00Z";
     // Let's make proper date format of getting wether forecast
     weatherDate = shellyTimePlus1.slice(0, 10);
 
@@ -150,7 +169,7 @@ function find_cheapest() {
                 });
             }
             if (heatingTime - 9 > 0) {
-                Timer.set(10 * 1000, false, function () {
+                Timer.set(12 * 1000, false, function () {
                     print("Starting to add hours 9-13");
                     if (heatingTime - 14 < 1) { data_indx = heatingTime; }
                     else { data_indx = 14; }
@@ -158,7 +177,7 @@ function find_cheapest() {
                 });
             }
             if (heatingTime - 14 > 0) {
-                Timer.set(15 * 1000, false, function () {
+                Timer.set(19 * 1000, false, function () {
                     print("Starting to add hours 14-19");
                     if (heatingTime - 19 < 1) { data_indx = heatingTime; }
                     else { data_indx = 19; }
@@ -166,7 +185,7 @@ function find_cheapest() {
                 });
             }
             if (heatingTime - 19 > 0) {
-                Timer.set(20 * 1000, false, function () {
+                Timer.set(26 * 1000, false, function () {
                     print("Starting to add hours 19-23");
                     if (heatingTime - 24 < 1) { data_indx = heatingTime; }
                     else { data_indx = 24; }
@@ -182,7 +201,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
         let hour, price;
         if (sorted_prices.length > 0) {
-            hour = unixTimeToHumanReadable(sorted_prices[i].timestamp, 2, 0).slice(11, 13);
+            hour = unixTimeToHumanReadable(sorted_prices[i].timestamp, timezone, 0).slice(11, 13);
             price = sorted_prices[i].price;
         }
         else {
@@ -207,6 +226,28 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
         }
         )
     }
+}
+
+//Find a Day of Week
+/* 0 = Sunday */
+function dayofweek(y, m, d) {
+    let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    if (m < 3) { y-- };
+    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+
+//Find if we have daylight saving time
+function IsDST(day, month, dow) {
+    //January, february, and december are out.
+    if (month < 3 || month > 10) return false;
+    if (month > 3 && month < 10) return true;
+
+    let previousSunday = day - dow;
+
+    if (month === 3) return previousSunday >= 25;
+    if (month === 10) return previousSunday < 25;
+
+    return false; // this line never gonna happend
 }
 
 // Shelly doesn't support any date-time management.
@@ -366,22 +407,21 @@ function deleteSchedulers() {
     Shelly.call("Schedule.DeleteAll");
 }
 
-// Set automatic one hour countdown timer to flip the Shelly status
+// Set countdown timer to flip the Shelly status
 // Auto_on or auto_off is depends on the "is_reverse" parameter
-// Delay_hour is the time period in hour. Shelly will translate this to seconds.
+// Delay_hour is the time period in hour. Shelly needs this in seconds.
+// Added 1 second to avoid unnecessary on-off for continous hours
 function setTimer(is_reverse, delay_hour) {
-    let is_on;
-    if (is_reverse) { is_on = "on" }
-    else { is_on = "off" }
+    let is_on = is_reverse ? "on" : "off";
     print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");
     Shelly.call("Switch.SetConfig", {
         "id": 0,
         config: {
             "name": "Switch0",
             "auto_on": is_reverse,
-            "auto_on_delay": delay_hour * 60 * 60,
+            "auto_on_delay": (delay_hour * 60 * 60) + 1,
             "auto_off": !is_reverse,
-            "auto_off_delay": delay_hour * 60 * 60
+            "auto_off_delay": (delay_hour * 60 * 60) + 1
         }
     }
     )

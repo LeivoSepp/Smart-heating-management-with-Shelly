@@ -53,10 +53,8 @@ let dateStart;
 let dateEnd;
 let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
 let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
-let shellyUnixtime = Shelly.getComponentStatus("sys").unixtime;
-let year;
-let month;
-let date;
+let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
+let shellyLocaltime = Shelly.getComponentStatus("sys").time;
 
 // Crontab for running this script. 
 // This script is run at random moment during the first 15 minutes after 23:00
@@ -72,34 +70,33 @@ let script_number = Shelly.getCurrentScriptId();
 // Let's start with Shelly GetStatus to get location, date and time
 function getShellyStatus() {
     //test some custom date
-    //shellyUnixtime = dateTimeToUnixTime(2023, 2, 1, 12, 0);
+    //shellyUnixtimeUTC = dateTimeToUnixTime(2023, 2, 1, 12, 0);
+
+    //find Shelly timezone
+    let shellyUTCDateTime = unixTimeToHumanReadable(shellyUnixtimeUTC, 0, 0);
+    let shellyUTCHour = JSON.parse(shellyUTCDateTime.slice(11, 13));
+    let shellyLocalHour = JSON.parse(shellyLocaltime.slice(0, 2));
+    timezone = shellyLocalHour - shellyUTCHour;
+    if (timezone > 12) { timezone -= 24; }
+    if (timezone < -12) { timezone += 24; }
 
     // Extract Shelly year, month and day
-    let dateTime = unixTimeToHumanReadable(shellyUnixtime, timezone, 0);
-    year = JSON.parse(dateTime.slice(0, 4));
-    month = JSON.parse(dateTime.slice(5, 7));
-    date = JSON.parse(dateTime.slice(8, 10));
+    let dateTime = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, 0);
+    print("Shelly local date and time ", dateTime);
 
-    let addDays = -1; //yesterday, used in case the scipt started before 3PM and we don't have tomorrow prices
-    //If it is daylight time, then add proper hours for Elering query 
-    let IsDaylight = IsDST(date, month, dayofweek(year, month, date));
-    timezone = IsDaylight ? 3 : 2;
+    // After 23:00 this script will use tomorrow's prices
+    // Running this script before 23:00, today energy prices are used.
+    let addDays = shellyLocalHour > 23 ? 0 : -1;
+
     // Let's prepare proper date-time formats for Elering query
-    let shellyTime = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays);
-    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtime, timezone, addDays + 1);
-    dateStart = shellyTime.slice(0, 10);
-    dateEnd = shellyTimePlus1.slice(0, 10);
+    let shellyTime = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, addDays);
+    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, addDays + 1);
+    let hourStart = JSON.stringify(24 - timezone);
+    let hourEnd = JSON.stringify(24 - timezone - 1);
+    dateStart = shellyTime.slice(0, 10) + "T" + hourStart + ":00Z";
+    dateEnd = shellyTimePlus1.slice(0, 10) + "T" + hourEnd + ":00Z";
 
-    dateStart = IsDaylight ? dateStart + "T21:00Z" : dateStart + "T22:00Z";
-    dateEnd = IsDaylight ? dateEnd + "T20:00Z" : dateEnd + "T21:00Z";
-
-    let shellyHour = JSON.parse(unixTimeToHumanReadable(shellyUnixtime, timezone, addDays).slice(11, 13));
-    // Only after 3PM this script can calculate schedule for tomorrow as the energy prices are not available before 3PM
-    if (shellyHour >= 15) {
-        addDays = 0
-    }
-
-    // Let's make proper date format of getting wether forecast
+    // Let's make proper date format to get weather forecast
     weatherDate = shellyTimePlus1.slice(0, 10);
 
     // Let's call Open-Meteo weather forecast API to get tomorrow min and max temperatures
@@ -146,8 +143,8 @@ function find_cheapest() {
             // Sort prices from smallest to largest
             sorted = sort(pricesArray, "price");
 
-            print("Cheapest daily price:", sorted[0].price, " ", unixTimeToHumanReadable(sorted[0].timestamp, 2, 0));
-            print("Most expensive daily price", sorted[sorted.length - 1].price, " ", unixTimeToHumanReadable(sorted[sorted.length - 1].timestamp, 2, 0));
+            print("Cheapest daily price:", sorted[0].price, " ", unixTimeToHumanReadable(sorted[0].timestamp, timezone, 0));
+            print("Most expensive daily price", sorted[sorted.length - 1].price, " ", unixTimeToHumanReadable(sorted[sorted.length - 1].timestamp, timezone, 0));
 
             // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
             // These 4 RPC calls are used here. 
@@ -228,26 +225,22 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
     }
 }
 
+//this function for testing purposes only
+function dateTimeToUnixTime(year, month, day, hh, mm) {
+    let month_yday = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let year_adj = year + 4800;  /* Ensure positive year, multiple of 400. */
+    let febs = year_adj - (month <= 2 ? 1 : 0);  /* Februaries since base. */
+    let leap_days = 1 + Math.floor(febs / 4) - Math.floor(febs / 100) + Math.floor(febs / 400);
+    let days = 365 * year_adj + leap_days + month_yday[month - 1] + day - 1;
+    return (days - 2472692) * 86400 + hh * 3600 + mm * 60;  /* Adjust to Unix epoch. */
+}
+
 //Find a Day of Week
 /* 0 = Sunday */
 function dayofweek(y, m, d) {
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     if (m < 3) { y-- };
     return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
-}
-
-//Find if we have daylight saving time
-function IsDST(day, month, dow) {
-    //January, february, and december are out.
-    if (month < 3 || month > 10) return false;
-    if (month > 3 && month < 10) return true;
-
-    let previousSunday = day - dow;
-
-    if (month === 3) return previousSunday >= 25;
-    if (month === 10) return previousSunday < 25;
-
-    return false; // this line never gonna happend
 }
 
 // Shelly doesn't support any date-time management.

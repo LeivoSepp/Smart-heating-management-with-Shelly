@@ -86,7 +86,7 @@ function getShellyStatus() {
 
     // After 23:00 this script will use tomorrow's prices
     // Running this script before 23:00, today energy prices are used.
-    let addDays = shellyLocalHour > 23 ? 0 : -1;
+    let addDays = shellyLocalHour >= 23 ? 0 : -1;
 
     // Let's prepare proper date-time formats for Elering query
     let shellyTime = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, addDays);

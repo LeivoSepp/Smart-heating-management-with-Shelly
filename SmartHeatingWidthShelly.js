@@ -10,6 +10,9 @@
 // No other countries support exist trough Elering API. 
 let country = "ee";
 
+let alwaysOnMaxPrice = 1;
+let alwaysOffMinPrice = 300;
+
 // Parameter heatingCurve is used to set proper heating curve for your house. This is very personal and also crucial component.
 // You can start with the default number 5, and take a look how this works for you.
 // If you feel cold, then increase this number. If you feel too warm, then decrease this number.

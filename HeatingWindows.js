@@ -6,7 +6,7 @@
 
 // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let country = "ee";
-let heatingWindow = 6;
+let heatingWindow = 6; //one window size in hours
 let heatingTime = 1;
 
 let alwaysOnMaxPrice = 1;
@@ -20,12 +20,11 @@ let eleringUrl = "https://dashboard.elering.ee/api/nps/price";
 let dateStart;
 let dateEnd;
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
-let shellyLocaltime = Shelly.getComponentStatus("sys").time;
 
 let totalHours;
 let waterHeatingTimes = [];
 let data_indx;
-let countWindows = 24 / heatingWindow;
+let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
 
 let minrand = JSON.stringify(Math.floor(Math.random() * 15));
 let secrand = JSON.stringify(Math.floor(Math.random() * 59));
@@ -81,14 +80,19 @@ function find_cheapest() {
         }
         else {
             // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
-            // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";  
-            result.headers = null;
-            result.message = null;
-
+            // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";
             print("We got market prices from Elering, going to do the heating window logic ...");
             let json = JSON.parse(result.body);
             result = null;
             let pricesArray = json["data"][country];
+
+            if (heatingWindow <= 0) {
+                for (let a = 0; a < pricesArray.length; a++) {
+                    if ((pricesArray[a].price < alwaysOnMaxPrice) && !(pricesArray[a].price > alwaysOffMinPrice)) {
+                        waterHeatingTimes.push({ timestamp: pricesArray[a].timestamp, price: pricesArray[a].price });
+                    }
+                }
+            }
 
             let arrayWindow = [];
             // Creating array for each heating window, sorting array, and then pushing smallest prices to waterHeatingTimes[] 
@@ -115,9 +119,11 @@ function find_cheapest() {
         // // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
         // // These 4 RPC calls are used here. 
         totalHours = waterHeatingTimes.length;
-        data_indx = (totalHours - 4) < 1 ? totalHours : 4;
-        print("Starting to add hours 0-3");
-        addSchedules(waterHeatingTimes, 0, data_indx);
+        if (totalHours > 0) {
+            data_indx = (totalHours - 4) < 1 ? totalHours : 4;
+            print("Starting to add hours 0-3");
+            addSchedules(waterHeatingTimes, 0, data_indx);
+        }
 
         // // This is the hack with the timers to add more RPC calls. We simply add a 4 second delay between the timer actions :) 
         // // Timers are called four times and each timer has four RPC calls to set up alltogether maximum 20 schedules.

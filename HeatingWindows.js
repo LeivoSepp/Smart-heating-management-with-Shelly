@@ -6,8 +6,8 @@
 
 // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let country = "ee";
-let heatingWindow = 6; //one window size in hours
-let heatingTime = 1;
+let heatingWindow = 6;  //one window size in hours, if zero then only alwaysOnMaxPrice and alwaysOffMinPrice used
+let heatingTime = 1;    //heating time in hours
 
 let alwaysOnMaxPrice = 1;
 let alwaysOffMinPrice = 300;

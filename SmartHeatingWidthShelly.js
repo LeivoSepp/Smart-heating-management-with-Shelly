@@ -48,8 +48,6 @@ let dateStart;
 let dateEnd;
 let totalHours;
 let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
-let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
-let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
 let script_number = Shelly.getCurrentScriptId();
 
@@ -79,14 +77,16 @@ function getShellyStatus() {
     dateStart = isoTime + "T" + hourStart + ":00Z";
     dateEnd = isoTimePlusDay + "T" + hourEnd + ":00Z";
 
+    //the followinf is only in case of weather forecast is used
     if (isWeatherForecastUsed) {
-        // Let's make proper date format to get weather forecast
+        let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
+        let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
         weatherDate = isoTimePlusDay;
-        // Let's call Open-Meteo weather forecast API to get tomorrow min and max temperatures
+        // calling Open-Meteo weather forecast API to get tomorrow min and max temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
         Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, function (response) {
             if (response === null || JSON.parse(response.body)["error"]) {
-                print("Getting temperature failed. Using default heatingTime parameter and will turn on heating fot ", heatingTime, " hours.");
+                print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
             }
             else {
                 let jsonForecast = JSON.parse(response.body);
@@ -101,8 +101,7 @@ function getShellyStatus() {
                 jsonForecast = null;
             }
             find_cheapest();
-        }
-        );
+        });
     } else {
         find_cheapest();
     }
@@ -115,7 +114,7 @@ function find_cheapest() {
     Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd }, function (result) {
         if (result === null) {
             // If there is no result, then use the default_start_time and heatingTime
-            print("Fetching market prices failed. Adding one big timeslot.");
+            print("Fetching market prices failed. Adding dummy timeslot.");
             setTimer(is_reverse, heatingTime);
             for (let i = 0; i < countWindows; i++) {
                 // filling up array with the hours
@@ -123,16 +122,15 @@ function find_cheapest() {
             }
         }
         else {
-            // Example of good json
             // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
             // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
-            print("We got market prices, going to sort them from cheapest to most expensive ...");
+            print("We got market prices, going to sort them from cheapest to most expensive.");
             let jsonElering = JSON.parse(result.body);
             result = null;
             let pricesArray = jsonElering["data"][country];
             jsonElering = null;
 
-            //heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
+            //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
             if (heatingWindow <= 0) {
                 for (let a = 0; a < pricesArray.length; a++) {
                     if ((pricesArray[a].price < alwaysOnMaxPrice) && !(pricesArray[a].price > alwaysOffMinPrice)) {
@@ -141,8 +139,9 @@ function find_cheapest() {
                 }
             }
 
+            //if time windows are used
             let arrayWindow = [];
-            // Creating array for each heating window, sorting array, and then pushing smallest prices to waterHeatingTimes[] 
+            // Create an array for each heating window, sort, and push the smallest prices to waterHeatingTimes[] 
             for (let i = 0; i < countWindows; i++) {
                 let k = 0;
                 let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
@@ -150,7 +149,6 @@ function find_cheapest() {
                     arrayWindow[k] = pricesArray[j];
                     k++;
                 }
-                // Sort prices from smallest to largest
                 let sorted = sort(arrayWindow, "price");
                 let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
 
@@ -167,8 +165,8 @@ function find_cheapest() {
             arrayWindow = null;
         }
 
-        // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
-        // These 4 RPC calls are used here. 
+        // The fact is that Shelly RPC calls are limited to 5.
+        // Kinda timer-hack is used to execute RPC calls 24 times 
         totalHours = heatingTimes.length;
         if (totalHours > 0) {
             data_indx = (totalHours - 4) < 1 ? totalHours : 4;
@@ -203,11 +201,10 @@ function find_cheapest() {
                 addSchedules(heatingTimes, 19, data_indx);
             });
         }
-
     });
 }
 
-// Add schedulers, switching them on or off is depends on the "is_reverse" parameter
+// Add actual schedulers
 function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
         let price = sorted_prices[i].price;
@@ -225,8 +222,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
                     "on": !is_reverse
                 }
             }]
-        }
-        )
+        })
     }
     sorted_prices = null;
 }
@@ -276,30 +272,28 @@ function deleteSchedulers() {
 }
 
 // Set countdown timer to flip the Shelly status
-// Auto_on or auto_off is depends on the "is_reverse" parameter
-// Delay_hour is the time period in hour. Shelly needs this in seconds.
-function setTimer(is_reverse, delay_hour) {
+function setTimer(is_reverse, timerHour) {
     let is_on = is_reverse ? "on" : "off";
-    print("Setting ", delay_hour, " hour auto_", is_on, "_delay.");
+    let timerSec = timerHour * 60 * 60;
+    print("Set auto " + is_on + " timer for ", timerSec, " seconds.");
     Shelly.call("Switch.SetConfig", {
         "id": 0,
         config: {
             "name": "Switch0",
             "auto_on": is_reverse,
-            "auto_on_delay": delay_hour * 60 * 60,
+            "auto_on_delay": timerSec,
             "auto_off": !is_reverse,
-            "auto_off_delay": delay_hour * 60 * 60
+            "auto_off_delay": timerSec
         }
-    }
-    )
+    })
 }
 
 function scheduleScript() {
     // This script is run at random moment during the first 15 minutes after 23:00
-    let minrand = JSON.stringify(Math.floor(Math.random() * 15));
-    let secrand = JSON.stringify(Math.floor(Math.random() * 59));
+    let minrand = Math.floor(Math.random() * 15);
+    let secrand = Math.floor(Math.random() * 59);
     let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
-    print("Creating schedule for this script with the following CRON", script_schedule);
+    print("Schedule this script to run daily at 23:", addLeadingZero(minrand) + ":" + addLeadingZero(secrand) + ".");
     Shelly.call("Schedule.create", {
         "id": 3, "enable": true, "timespec": script_schedule,
         "calls": [{
@@ -311,11 +305,16 @@ function scheduleScript() {
     })
 }
 
+function addLeadingZero(number) {
+    return number < 10 ? "0" + JSON.stringify(number) : JSON.stringify(number);
+}
+
 function stopScript() {
     // Stop this script in 1.5 minute from now
     Timer.set(100 * 1000, false, function () {
         print("Stopping the script ...");
         Shelly.call("Script.stop", { "id": script_number });
+        print("Script stopped.");
     });
 }
 

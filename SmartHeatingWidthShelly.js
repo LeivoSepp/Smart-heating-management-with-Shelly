@@ -1,24 +1,24 @@
-// This script is calculating next day heating time based on weather forecast, 
-// and turn on your heating system for cheapest hours based on electricity market price.
+// This script has three different modes: 
+// 1. Using weather forecast, the scipt calculates dynamically heating time for the next day. 
+// 2. Splitting day into time windows to turn on heating for cheapest hour in each window.
+// 3. Using price min-max levels to keep the shelly always on or off.
 
 // It's scheduled to run daily after 23:00 to set heating timeslots for next day.
-// by Leivo Sepp, 14.01.2023
+// updated by Leivo Sepp, 03.11.2023
 
-// Set the country Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv
-let country = "ee";
-let heatingWindow = 24;  //one window size in hours, if zero then only alwaysOnMaxPrice and alwaysOffMinPrice used
-let heatingTime = 5;    //heating time in hours
-
-let alwaysOnMaxPrice = 1;       //shelly is always on if energy price lower than this value
-let alwaysOffMinPrice = 300;    //shelly is always off if energy price higher than this value
+let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
+let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
+let heatingTime = 5;            // heating time in each time window (hours)
+let alwaysOnMaxPrice = 1;       // shelly is always on if energy price lower than this value
+let alwaysOffMinPrice = 300;    // shelly is always off if energy price higher than this value
+let is_reverse = true;          // Some heating systems requires reversed relay.
+let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
 
 // If getting electricity prices from Elering fails, then heating starts at the beginning of heating window.
+// If getting weather forecast fails, then default heating time is used
 
-// Some heating systems requires reversed relay. Put this "true" if you are sure that your appliance requires so.
-let is_reverse = true;
-
-let isWeatherForecastUsed = true;
-// Parameter heatingCurve is used to set proper heating curve for your house. This is very personal and also crucial component.
+// Following parameters used to calculate heating time only in case the weather forecast is turned on
+// HeatingCurve is used to set proper heating curve for your house. This is very personal and also crucial component.
 // You can start with the default number 5, and take a look how this works for you.
 // If you feel cold, then increase this number. If you feel too warm, then decrease this number.
 // You can see the dependency of temperature and and this parameter from this visualization: 
@@ -29,12 +29,6 @@ let isWeatherForecastUsed = true;
 let heatingCurve = 5;
 let startingTemp = 10;
 let powerFactor = 0.2;
-
-// This parameter used to set a number of heating hours in a day in case the weather forecast fails. Number 1-24. 
-// If Shelly was able to get the forecast, then this number is owerwritten by the heating curve calculation.
-// For example if this number is set to 5 then Shelly will be turned on for 5 most cheapest hours during a day. 
-// If the cheapest hours are 02:00, 04:00, 07:00, 15:00 and 16:00, then the Shelly is turned on 02-03, 04-05, 07-08 and 15-17 (two hours in a row).
-// let heatingTime = 5;
 
 // some global variables
 let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min&timezone=auto";
@@ -66,10 +60,7 @@ function getShellyStatus() {
     let addDays = shellyLocalHour >= 23 ? 0 : -1;
     let secondsInDay = 60 * 60 * 24;
 
-    print("Shelly local date and time ", shellyLocaltime);
-    shellyLocaltime = null;
-
-    // proper date-time format for Elering query
+    // build datetime for Elering query
     let isoTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
     let isoTimePlusDay = new Date((shellyUnixtimeUTC + timezoneSeconds + (secondsInDay * (addDays + 1))) * 1000).toISOString().slice(0, 10);
     let hourStart = JSON.stringify(24 - timezone);
@@ -77,12 +68,16 @@ function getShellyStatus() {
     dateStart = isoTime + "T" + hourStart + ":00Z";
     dateEnd = isoTimePlusDay + "T" + hourEnd + ":00Z";
 
-    //the followinf is only in case of weather forecast is used
+    print("Shelly local date and time ", shellyLocaltime);
+    shellyLocaltime = null;
+    shellyUnixtimeUTC = null;
+
+    //the following is used only in case of weather forecast based heating hours
     if (isWeatherForecastUsed) {
         let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
         let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
         weatherDate = isoTimePlusDay;
-        // calling Open-Meteo weather forecast API to get tomorrow min and max temperatures
+        // calling Open-Meteo weather forecast to get tomorrow min and max temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
         Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, function (response) {
             if (response === null || JSON.parse(response.body)["error"]) {
@@ -126,7 +121,7 @@ function find_cheapest() {
             // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
             print("We got market prices, going to sort them from cheapest to most expensive.");
             let jsonElering = JSON.parse(result.body);
-            result = null;
+            result = null; 
             let pricesArray = jsonElering["data"][country];
             jsonElering = null;
 

@@ -186,7 +186,7 @@ function priceCalculation(result, error_code, error) {
             print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0].price, " EUR/MWh (energy price + transmission) at ", new Date((sorted[0].timestamp + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
             for (let a = 0; a < sorted.length; a++) {
-                if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
+                if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice + nightRate) && !(sorted[a].price > alwaysOffMinPrice - dayRate)) {
                     heatingTimes.push({ hour: new Date((sorted[a].timestamp) * 1000).getHours(), price: sorted[a].price });
                 }
             }

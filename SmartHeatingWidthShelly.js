@@ -9,10 +9,31 @@
 let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
 let heatingTime = 5;            // heating time in each time window (hours)
-let alwaysOnMaxPrice = 5;       // shelly is always on if energy price lower than this value
-let alwaysOffMinPrice = 300;    // shelly is always off if energy price higher than this value
+let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value (transmission rate not included)
+let alwaysOffMinPrice = 300;    // always off if energy price higher than this value (transmission rate not included)
 let is_reverse = false;          // Some heating systems requires reversed relay.
 let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
+let dayRate = 56;               // Day electricity transmission rate without tax (EUR/MWh)
+let nightRate = 33;             // Night electricity transmission rate without tax (EUR/MWh)
+
+/*
+Elektrilevi electricity transmission rates:
+Võrk1 
+let dayRate = 72;
+let nightRate = 72;
+
+Võrk2
+let dayRate = 87;
+let nightRate = 50;
+
+Võrk2 kuutasuga
+let dayRate = 56;
+nightRate = 33;
+
+Võrk4
+let dayRate = 37;
+let nightRate = 21;
+*/
 
 // If getting electricity prices from Elering fails, then heating starts at the beginning of heating window.
 // If getting weather forecast fails, then default heating time is used
@@ -45,7 +66,7 @@ let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
 let script_number = Shelly.getCurrentScriptId();
 
-function getShellyStatus() {
+function start() {
     //find Shelly timezone
     let shellyLocaltime = new Date(shellyUnixtimeUTC * 1000);
     let shellyLocalHour = shellyLocaltime.getHours();
@@ -79,124 +100,138 @@ function getShellyStatus() {
         weatherDate = isoTimePlusDay;
         // calling Open-Meteo weather forecast to get tomorrow min and max temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
-        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, function (response) {
-            if (response === null || JSON.parse(response.body)["error"]) {
-                print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
-            }
-            else {
-                let jsonForecast = JSON.parse(response.body);
-                // temperature forecast, averaging tomorrow min and max temperatures 
-                let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
-                // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
-                heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
-                heatingTime = Math.ceil(heatingTime);
-                if (heatingTime > 24) { heatingTime = 24; }
-                print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
-                response = null;
-                jsonForecast = null;
-            }
-            find_cheapest();
-        });
+        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, weatherForecast);
     } else {
-        find_cheapest();
+        getElering();
     }
 }
 
-// This is the main function to proceed with the price sorting etc.
-function find_cheapest() {
+function weatherForecast(result, error_code, error) {
+    if (result === null || JSON.parse(result.body)["error"]) {
+        print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
+    }
+    else {
+        let jsonForecast = JSON.parse(result.body);
+        // temperature forecast, averaging tomorrow min and max temperatures 
+        let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
+        // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
+        heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
+        heatingTime = Math.ceil(heatingTime);
+        if (heatingTime > 24) { heatingTime = 24; }
+        print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
+        result = null;
+        jsonForecast = null;
+    }
+    getElering();
+}
+
+function getElering() {
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
-    Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd }, function (result) {
-        if (result === null) {
-            // If there is no result, then use the default_start_time and heatingTime
-            print("Fetching market prices failed. Adding dummy timeslot.");
-            setTimer(is_reverse, heatingTime);
-            for (let i = 0; i < countWindows; i++) {
-                // filling up array with the hours
-                heatingTimes.push({ hour: i * heatingWindow, price: "price unknown" });
+    Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd }, priceCalculation);
+}
+
+function priceCalculation(result, error_code, error) {
+    if (result === null) {
+        // If there is no result, then use the default_start_time and heatingTime
+        print("Fetching market prices failed. Adding dummy timeslot.");
+        setTimer(is_reverse, heatingTime);
+        for (let i = 0; i < countWindows; i++) {
+            // filling up array with the hours
+            heatingTimes.push({ hour: i * heatingWindow, price: "price unknown" });
+        }
+    }
+    else {
+        // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
+        // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
+        print("We got market prices, going to sort them from cheapest to most expensive.");
+        let jsonElering = JSON.parse(result.body);
+        result = null; //clear memory
+        let pricesArray = jsonElering["data"][country];
+        jsonElering = null; //clear memory
+
+        //add electriciy transmission rate to market price
+        for (let i = 0; i < pricesArray.length; i++) {
+            let hour = new Date((pricesArray[i].timestamp) * 1000).getHours();
+            let day = new Date((pricesArray[i].timestamp) * 1000).getDay();
+            if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
+                pricesArray[i].price += nightRate;
+            }
+            else {
+                pricesArray[i].price += dayRate;
             }
         }
-        else {
-            // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
-            // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
-            print("We got market prices, going to sort them from cheapest to most expensive.");
-            let jsonElering = JSON.parse(result.body);
-            result = null; 
-            let pricesArray = jsonElering["data"][country];
-            jsonElering = null;
 
-            //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
-            if (heatingWindow <= 0) {
-                for (let a = 0; a < pricesArray.length; a++) {
-                    if ((pricesArray[a].price < alwaysOnMaxPrice) && !(pricesArray[a].price > alwaysOffMinPrice)) {
-                        heatingTimes.push({ hour: new Date((pricesArray[a].timestamp) * 1000).getHours(), price: pricesArray[a].price });
-                    }
+        //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
+        if (heatingWindow <= 0) {
+            for (let a = 0; a < pricesArray.length; a++) {
+                if ((pricesArray[a].price < alwaysOnMaxPrice + nightRate) && !(pricesArray[a].price > alwaysOffMinPrice - dayRate)) {
+                    heatingTimes.push({ hour: new Date((pricesArray[a].timestamp) * 1000).getHours(), price: pricesArray[a].price });
                 }
             }
+        }
+        //if time windows are used
+        let arrayWindow = [];
+        // Create an array for each heating window, sort, and push the smallest prices to waterHeatingTimes[] 
+        for (let i = 0; i < countWindows; i++) {
+            let k = 0;
+            let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
+            for (let j = i * heatingWindow; j < hoursInWindow; j++) {
+                arrayWindow[k] = pricesArray[j];
+                k++;
+            }
+            let sorted = sort(arrayWindow, "price");
+            let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
 
-            //if time windows are used
-            let arrayWindow = [];
-            // Create an array for each heating window, sort, and push the smallest prices to waterHeatingTimes[] 
-            for (let i = 0; i < countWindows; i++) {
-                let k = 0;
-                let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
-                for (let j = i * heatingWindow; j < hoursInWindow; j++) {
-                    arrayWindow[k] = pricesArray[j];
-                    k++;
-                }
-                let sorted = sort(arrayWindow, "price");
-                let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
+            print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0].price, " EUR/MWh (energy price + transmission) at ", new Date((sorted[0].timestamp + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
-                print("For the time period: ", (i * heatingWindow) + "-" + ((i * heatingWindow) + hoursInWindow), ", cheapest price is", sorted[0].price, " at ", new Date((sorted[0].timestamp + timezoneSeconds) * 1000), ".");
-
-                for (let a = 0; a < sorted.length; a++) {
-                    if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
-                        heatingTimes.push({ hour: new Date((sorted[a].timestamp) * 1000).getHours(), price: sorted[a].price });
-                    }
+            for (let a = 0; a < sorted.length; a++) {
+                if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
+                    heatingTimes.push({ hour: new Date((sorted[a].timestamp) * 1000).getHours(), price: sorted[a].price });
                 }
             }
-            pricesArray = null;
-            sorted = null;
-            arrayWindow = null;
         }
-
-        // The fact is that Shelly RPC calls are limited to 5.
-        // Kinda timer-hack is used to execute RPC calls 24 times 
-        totalHours = heatingTimes.length;
-        if (totalHours > 0) {
-            data_indx = (totalHours - 4) < 1 ? totalHours : 4;
-            print("Starting to add hours 0-3");
-            addSchedules(heatingTimes, 0, data_indx);
-        }
-        if (totalHours - 4 > 0) {
-            Timer.set(5 * 1000, false, function () {
-                data_indx = (totalHours - 9) < 1 ? totalHours : 9;
-                print("Starting to add hours 4-8");
-                addSchedules(heatingTimes, 4, data_indx);
-            });
-        }
-        if (totalHours - 9 > 0) {
-            Timer.set(12 * 1000, false, function () {
-                data_indx = (totalHours - 14) < 1 ? totalHours : 14;
-                print("Starting to add hours 9-13");
-                addSchedules(heatingTimes, 9, data_indx);
-            });
-        }
-        if (totalHours - 14 > 0) {
-            Timer.set(19 * 1000, false, function () {
-                data_indx = (totalHours - 19) < 1 ? totalHours : 19;
-                print("Starting to add hours 14-19");
-                addSchedules(heatingTimes, 14, data_indx);
-            });
-        }
-        if (totalHours - 19 > 0) {
-            Timer.set(26 * 1000, false, function () {
-                data_indx = (totalHours - 24) < 1 ? totalHours : 24;
-                print("Starting to add hours 19-23");
-                addSchedules(heatingTimes, 19, data_indx);
-            });
-        }
-    });
+        //clearing memory
+        pricesArray = null;
+        sorted = null;
+        arrayWindow = null;
+    }
+    // The fact is that Shelly RPC calls are limited to 5.
+    // Kinda timer-hack is used to execute RPC calls 24 times 
+    totalHours = heatingTimes.length;
+    if (totalHours > 0) {
+        data_indx = (totalHours - 4) < 1 ? totalHours : 4;
+        print("Starting to add hours 0-3");
+        addSchedules(heatingTimes, 0, data_indx);
+    }
+    if (totalHours - 4 > 0) {
+        Timer.set(5 * 1000, false, function () {
+            data_indx = (totalHours - 9) < 1 ? totalHours : 9;
+            print("Starting to add hours 4-8");
+            addSchedules(heatingTimes, 4, data_indx);
+        });
+    }
+    if (totalHours - 9 > 0) {
+        Timer.set(12 * 1000, false, function () {
+            data_indx = (totalHours - 14) < 1 ? totalHours : 14;
+            print("Starting to add hours 9-13");
+            addSchedules(heatingTimes, 9, data_indx);
+        });
+    }
+    if (totalHours - 14 > 0) {
+        Timer.set(19 * 1000, false, function () {
+            data_indx = (totalHours - 19) < 1 ? totalHours : 19;
+            print("Starting to add hours 14-19");
+            addSchedules(heatingTimes, 14, data_indx);
+        });
+    }
+    if (totalHours - 19 > 0) {
+        Timer.set(26 * 1000, false, function () {
+            data_indx = (totalHours - 24) < 1 ? totalHours : 24;
+            print("Starting to add hours 19-23");
+            addSchedules(heatingTimes, 19, data_indx);
+        });
+    }
 }
 
 // Add actual schedulers
@@ -204,7 +239,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
         let price = sorted_prices[i].price;
         let hour = sorted_prices[i].hour;
-        print("Scheduled start at: ", hour, " price: ", price);
+        print("Scheduled start at: ", hour, " price: ", price, " EUR/MWh (energy price + transmission).");
         // Set the start time crontab
         let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
         // Creating one hour schedulers 
@@ -314,7 +349,7 @@ function stopScript() {
 }
 
 deleteSchedulers();
-getShellyStatus();
+start();
 setTimer(is_reverse, 1);
 scheduleScript();
 stopScript();

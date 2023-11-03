@@ -22,14 +22,9 @@ let dateEnd;
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
 
 let totalHours;
-let waterHeatingTimes = [];
+let heatingTimes = [];
 let data_indx;
 let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
-
-let minrand = JSON.stringify(Math.floor(Math.random() * 15));
-let secrand = JSON.stringify(Math.floor(Math.random() * 59));
-let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
-let script_number = Shelly.getCurrentScriptId();
 
 function addLeadingZero(number) {
     return number < 10 ? "0" + JSON.stringify(number) : JSON.stringify(number);
@@ -53,9 +48,7 @@ function find_cheapest() {
     let addDays = shellyLocalHour >= 23 ? 0 : -1;
     let secondsInDay = 60 * 60 * 24;
 
-    // Extract Shelly year, month and day
-    let dateTime = new Date();
-    print("Shelly local date and time ", dateTime);
+    print("Shelly local date and time ", shellyLocaltime);
 
     // proper date-time format for Elering query
     let eleringTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
@@ -75,7 +68,7 @@ function find_cheapest() {
             for (let i = 0; i < countWindows; i++) {
                 let unixtime = dateTimeToUnixTime(year, month, date, (i * heatingWindow) - 2, 0);
                 // filling up array with the unixtimestamps
-                waterHeatingTimes.push({ timestamp: unixtime });
+                heatingTimes.push({ timestamp: unixtime });
             }
         }
         else {
@@ -85,11 +78,12 @@ function find_cheapest() {
             let json = JSON.parse(result.body);
             result = null;
             let pricesArray = json["data"][country];
+            json = null;
 
             if (heatingWindow <= 0) {
                 for (let a = 0; a < pricesArray.length; a++) {
                     if ((pricesArray[a].price < alwaysOnMaxPrice) && !(pricesArray[a].price > alwaysOffMinPrice)) {
-                        waterHeatingTimes.push({ timestamp: pricesArray[a].timestamp, price: pricesArray[a].price });
+                        heatingTimes.push({ timestamp: pricesArray[a].timestamp, price: pricesArray[a].price });
                     }
                 }
             }
@@ -108,7 +102,7 @@ function find_cheapest() {
                 let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
                 for (let a = 0; a < sorted.length; a++) {
                     if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
-                        waterHeatingTimes.push({ timestamp: sorted[a].timestamp, price: sorted[a].price });
+                        heatingTimes.push({ timestamp: sorted[a].timestamp, price: sorted[a].price });
                     }
                 }
             }
@@ -118,43 +112,38 @@ function find_cheapest() {
         }
         // // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
         // // These 4 RPC calls are used here. 
-        totalHours = waterHeatingTimes.length;
+        totalHours = heatingTimes.length;
         if (totalHours > 0) {
             data_indx = (totalHours - 4) < 1 ? totalHours : 4;
             print("Starting to add hours 0-3");
-            addSchedules(waterHeatingTimes, 0, data_indx);
+            addSchedules(heatingTimes, 0, data_indx);
         }
-
-        // // This is the hack with the timers to add more RPC calls. We simply add a 4 second delay between the timer actions :) 
-        // // Timers are called four times and each timer has four RPC calls to set up alltogether maximum 20 schedules.
-        // // The Timers in Shelly script are limited also to 5, as one is used to stop the script itself we can call maximum 4 timers.
-        // // For some reason I couldn't make this code smarter as calling timers seems not working from for-loop which would be the normal solution.
         if (totalHours - 4 > 0) {
             Timer.set(5 * 1000, false, function () {
                 data_indx = (totalHours - 9) < 1 ? totalHours : 9;
                 print("Starting to add hours 4-8");
-                addSchedules(waterHeatingTimes, 4, data_indx);
+                addSchedules(heatingTimes, 4, data_indx);
             });
         }
         if (totalHours - 9 > 0) {
             Timer.set(12 * 1000, false, function () {
                 data_indx = (totalHours - 14) < 1 ? totalHours : 14;
                 print("Starting to add hours 9-13");
-                addSchedules(waterHeatingTimes, 9, data_indx);
+                addSchedules(heatingTimes, 9, data_indx);
             });
         }
         if (totalHours - 14 > 0) {
             Timer.set(19 * 1000, false, function () {
                 data_indx = (totalHours - 19) < 1 ? totalHours : 19;
                 print("Starting to add hours 14-19");
-                addSchedules(waterHeatingTimes, 14, data_indx);
+                addSchedules(heatingTimes, 14, data_indx);
             });
         }
         if (totalHours - 19 > 0) {
             Timer.set(26 * 1000, false, function () {
                 data_indx = (totalHours - 24) < 1 ? totalHours : 24;
                 print("Starting to add hours 19-23");
-                addSchedules(waterHeatingTimes, 19, data_indx);
+                addSchedules(heatingTimes, 19, data_indx);
             });
         }
     });
@@ -264,6 +253,10 @@ function setTimer(is_reverse, delay_hour) {
 }
 
 function scheduleScript() {
+    let minrand = JSON.stringify(Math.floor(Math.random() * 15));
+    let secrand = JSON.stringify(Math.floor(Math.random() * 59));
+    let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
+    let script_number = Shelly.getCurrentScriptId();
     print("Creating schedule for this script with the following CRON", script_schedule);
     Shelly.call("Schedule.create", {
         "id": 3, "enable": true, "timespec": script_schedule,

@@ -3,14 +3,11 @@
 
 // It's scheduled to run daily after 23:00 to set heating timeslots for next day.
 // by Leivo Sepp, 14.01.2023
-// Energy Market price is downloaded from Elering API https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET. 
-// Weather forecast is based on free Open-Meteo API https://open-meteo.com/en/docs
 
 // Set the country Estonia-ee, Finland-fi, Lthuania-lt, Latvia-lv
-// No other countries support exist trough Elering API. 
 let country = "ee";
 
-let alwaysOnMaxPrice = 1;
+let alwaysOnMaxPrice = 70;
 let alwaysOffMinPrice = 300;
 
 // Parameter heatingCurve is used to set proper heating curve for your house. This is very personal and also crucial component.
@@ -51,56 +48,41 @@ let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=temperature_2m_
 let eleringUrl = "https://dashboard.elering.ee/api/nps/price";
 let data_indx;
 let sorted = [];
+let heatingTimes = [];
 let weatherDate;
 let dateStart;
 let dateEnd;
 let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
 let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
-let shellyLocaltime = Shelly.getComponentStatus("sys").time;
 
-// Crontab for running this script. 
-// This script is run at random moment during the first 15 minutes after 23:00
-// Random timing is used so that all clients wouldn't be polling the server exactly at same time
-let minrand = JSON.stringify(Math.floor(Math.random() * 15));
-let secrand = JSON.stringify(Math.floor(Math.random() * 59));
-let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
-
-// Number for this script. If this doesn't work (as in earlier versions), get it from this url (use your own ip) http://192.168.33.1/rpc/Script.List
-// You can check the schedules here (use your own ip) http://192.168.33.1/rpc/Schedule.List
-let script_number = Shelly.getCurrentScriptId();
-
-// Let's start with Shelly GetStatus to get location, date and time
 function getShellyStatus() {
-    //test some custom date
-    //shellyUnixtimeUTC = dateTimeToUnixTime(2023, 2, 1, 12, 0);
-
     //find Shelly timezone
-    let shellyUTCDateTime = unixTimeToHumanReadable(shellyUnixtimeUTC, 0, 0);
-    let shellyUTCHour = JSON.parse(shellyUTCDateTime.slice(11, 13));
-    let shellyLocalHour = JSON.parse(shellyLocaltime.slice(0, 2));
-    timezone = shellyLocalHour - shellyUTCHour;
+    let shellyLocaltime = new Date(shellyUnixtimeUTC * 1000);
+    let shellyLocalHour = shellyLocaltime.getHours();
+    let shellyUTCHour = shellyLocaltime.toISOString().slice(11, 13);
+    let timezone = shellyLocalHour - shellyUTCHour;
     if (timezone > 12) { timezone -= 24; }
     if (timezone < -12) { timezone += 24; }
-
-    // Extract Shelly year, month and day
-    let dateTime = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, 0);
-    print("Shelly local date and time ", dateTime);
+    timezoneSeconds = timezone * 60 * 60;
 
     // After 23:00 this script will use tomorrow's prices
     // Running this script before 23:00, today energy prices are used.
     let addDays = shellyLocalHour >= 23 ? 0 : -1;
+    let secondsInDay = 60 * 60 * 24;
 
-    // Let's prepare proper date-time formats for Elering query
-    let shellyTime = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, addDays);
-    let shellyTimePlus1 = unixTimeToHumanReadable(shellyUnixtimeUTC, timezone, addDays + 1);
+    print("Shelly local date and time ", shellyLocaltime);
+    shellyLocaltime = null;
+    // proper date-time format for Elering query
+    let isoTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
+    let isoTimePlusDay = new Date((shellyUnixtimeUTC + timezoneSeconds + (secondsInDay * (addDays + 1))) * 1000).toISOString().slice(0, 10);
     let hourStart = JSON.stringify(24 - timezone);
     let hourEnd = JSON.stringify(24 - timezone - 1);
-    dateStart = shellyTime.slice(0, 10) + "T" + hourStart + ":00Z";
-    dateEnd = shellyTimePlus1.slice(0, 10) + "T" + hourEnd + ":00Z";
+    dateStart = isoTime + "T" + hourStart + ":00Z";
+    dateEnd = isoTimePlusDay + "T" + hourEnd + ":00Z";
 
     // Let's make proper date format to get weather forecast
-    weatherDate = shellyTimePlus1.slice(0, 10);
+    weatherDate = isoTimePlusDay;
 
     // Let's call Open-Meteo weather forecast API to get tomorrow min and max temperatures
     print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
@@ -109,14 +91,16 @@ function getShellyStatus() {
             print("Getting temperature failed. Using default heatingTime parameter and will turn on heating fot ", heatingTime, " hours.");
         }
         else {
-            let json = JSON.parse(response.body);
-            // This is very simple way for temperature forecast, just averaging tomorrow min and max temperatures :) 
-            let avgTempForecast = (json["daily"]["temperature_2m_max"][0] + json["daily"]["temperature_2m_min"][0]) / 2;
+            let jsonForecast = JSON.parse(response.body);
+            // temperature forecast, averaging tomorrow min and max temperatures 
+            let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
             // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
             heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
             heatingTime = Math.ceil(heatingTime);
             if (heatingTime > 24) { heatingTime = 24; }
             print("Temperture forecast tomorrow", weatherDate, " is ", avgTempForecast, " heating is turned on for ", heatingTime, " hours.");
+            response = null;
+            jsonForecast = null;
         }
         find_cheapest();
     }
@@ -140,56 +124,57 @@ function find_cheapest() {
             // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
             // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
             print("We got market prices, going to sort them from cheapest to most expensive ...");
-            let json = JSON.parse(result.body);
-            let pricesArray = json["data"][country];
-
-            // Sort prices from smallest to largest
+            let jsonElering = JSON.parse(result.body);
+            result = null;
+            let pricesArray = jsonElering["data"][country];
+            jsonElering = null;
             sorted = sort(pricesArray, "price");
+            pricesArray = null;
 
-            print("Cheapest daily price:", sorted[0].price, " ", unixTimeToHumanReadable(sorted[0].timestamp, timezone, 0));
-            print("Most expensive daily price", sorted[sorted.length - 1].price, " ", unixTimeToHumanReadable(sorted[sorted.length - 1].timestamp, timezone, 0));
+            print("Cheapest daily price:", sorted[0].price, " ", new Date((sorted[0].timestamp + timezoneSeconds) * 1000));
+            print("Most expensive daily price", sorted[sorted.length - 1].price, " ", new Date((sorted[sorted.length - 1].timestamp + timezoneSeconds) * 1000));
+
+            for (let a = 0; a < sorted.length; a++) {
+                if ((a <= heatingTime || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
+                    heatingTimes.push({ timestamp: sorted[a].timestamp, price: sorted[a].price });
+                }
+            }
+            sorted = null;
 
             // The fact is that Shelly RPC calls are limited to 5, one is used already for HTTP.GET and we have only 4 left.
             // These 4 RPC calls are used here. 
-            if (heatingTime - 4 < 1) { data_indx = heatingTime; }
-            else { data_indx = 4; }
-            print("Starting to add hours 0-3");
-            addSchedules(sorted, 0, data_indx);
-
-            // This is the hack with the timers to add more RPC calls. We simply add a 4 second delay between the timer actions :) 
-            // Timers are called four times and each timer has four RPC calls to set up alltogether maximum 20 schedules.
-            // The Timers in Shelly script are limited also to 5, as one is used to stop the script itself we can call maximum 4 timers.
-            // For some reason I couldn't make this code smarter as calling timers seems not working from for-loop which would be the normal solution.
-            if (heatingTime - 4 > 0) {
+            totalHours = heatingTimes.length;
+            if (totalHours > 0) {
+                data_indx = (totalHours - 4) < 1 ? totalHours : 4;
+                print("Starting to add hours 0-3");
+                addSchedules(heatingTimes, 0, data_indx);
+            }
+            if (totalHours - 4 > 0) {
                 Timer.set(5 * 1000, false, function () {
+                    data_indx = (totalHours - 9) < 1 ? totalHours : 9;
                     print("Starting to add hours 4-8");
-                    if (heatingTime - 9 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 9; }
-                    addSchedules(sorted, 4, data_indx);
+                    addSchedules(heatingTimes, 4, data_indx);
                 });
             }
-            if (heatingTime - 9 > 0) {
+            if (totalHours - 9 > 0) {
                 Timer.set(12 * 1000, false, function () {
+                    data_indx = (totalHours - 14) < 1 ? totalHours : 14;
                     print("Starting to add hours 9-13");
-                    if (heatingTime - 14 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 14; }
-                    addSchedules(sorted, 9, data_indx);
+                    addSchedules(heatingTimes, 9, data_indx);
                 });
             }
-            if (heatingTime - 14 > 0) {
+            if (totalHours - 14 > 0) {
                 Timer.set(19 * 1000, false, function () {
+                    data_indx = (totalHours - 19) < 1 ? totalHours : 19;
                     print("Starting to add hours 14-19");
-                    if (heatingTime - 19 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 19; }
-                    addSchedules(sorted, 14, data_indx);
+                    addSchedules(heatingTimes, 14, data_indx);
                 });
             }
-            if (heatingTime - 19 > 0) {
+            if (totalHours - 19 > 0) {
                 Timer.set(26 * 1000, false, function () {
+                    data_indx = (totalHours - 24) < 1 ? totalHours : 24;
                     print("Starting to add hours 19-23");
-                    if (heatingTime - 24 < 1) { data_indx = heatingTime; }
-                    else { data_indx = 24; }
-                    addSchedules(sorted, 19, data_indx);
+                    addSchedules(heatingTimes, 19, data_indx);
                 });
             }
         }
@@ -201,7 +186,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
         let hour, price;
         if (sorted_prices.length > 0) {
-            hour = unixTimeToHumanReadable(sorted_prices[i].timestamp, timezone, 0).slice(11, 13);
+            hour = new Date((sorted_prices[i].timestamp + timezoneSeconds) * 1000).getHours();
             price = sorted_prices[i].price;
         }
         else {
@@ -209,8 +194,6 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
             price = "no price.";
         }
         print("Scheduled start at: ", hour, " price: ", price);
-        // Remove leading zeros from hour
-        if (hour.slice(0, 1) === "0") { hour = hour.slice(1, 2); }
         // Set the start time crontab
         let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
         // Creating one hour schedulers 
@@ -226,6 +209,7 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
         }
         )
     }
+    sorted_prices = null;
 }
 
 //this function for testing purposes only
@@ -236,127 +220,6 @@ function dateTimeToUnixTime(year, month, day, hh, mm) {
     let leap_days = 1 + Math.floor(febs / 4) - Math.floor(febs / 100) + Math.floor(febs / 400);
     let days = 365 * year_adj + leap_days + month_yday[month - 1] + day - 1;
     return (days - 2472692) * 86400 + hh * 3600 + mm * 60;  /* Adjust to Unix epoch. */
-}
-
-//Find a Day of Week
-/* 0 = Sunday */
-function dayofweek(y, m, d) {
-    let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-    if (m < 3) { y-- };
-    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
-}
-
-// Shelly doesn't support any date-time management.
-// With this very basic math we can convert unix time to Human readable format
-function unixTimeToHumanReadable(seconds, timezone, addDay) {
-    //add timezone
-    seconds += 60 * 60 * timezone;
-    //add days
-    seconds += 60 * 60 * 24 * addDay;
-    // Save the time in Human readable format
-    let ans = "";
-    // Number of days in month in normal year
-    let daysOfMonth = [31, 28, 31, 30, 31, 30,
-        31, 31, 30, 31, 30, 31];
-    let currYear, daysTillNow, extraTime,
-        extraDays, index, date, month, hours,
-        minutes, secondss, flag = 0;
-    // Calculate total days unix time T
-    daysTillNow = Math.floor(seconds / (24 * 60 * 60));
-    extraTime = seconds % (24 * 60 * 60);
-    currYear = 1970;
-    // Calculating current year
-    while (true) {
-        if (currYear % 400 === 0
-            || (currYear % 4 === 0 && currYear % 100 !== 0)) {
-            if (daysTillNow < 366) {
-                break;
-            }
-            daysTillNow -= 366;
-        }
-        else {
-            if (daysTillNow < 365) {
-                break;
-            }
-            daysTillNow -= 365;
-        }
-        currYear += 1;
-    }
-    // Updating extradays because it will give days till previous day and we have include current day
-    extraDays = daysTillNow + 1;
-    if (currYear % 400 === 0 ||
-        (currYear % 4 === 0 &&
-            currYear % 100 !== 0))
-        flag = 1;
-    // Calculating MONTH and DATE
-    month = 0; index = 0;
-    if (flag === 1) {
-        while (true) {
-            if (index === 1) {
-                if (extraDays - 29 < 0)
-                    break;
-
-                month += 1;
-                extraDays -= 29;
-            }
-            else {
-                if (extraDays - daysOfMonth[index] <= 0) {
-                    break;
-                }
-                month += 1;
-                extraDays -= daysOfMonth[index];
-            }
-            index += 1;
-        }
-    }
-    else {
-        while (true) {
-            if (extraDays - daysOfMonth[index] <= 0) {
-                break;
-            }
-            month += 1;
-            extraDays -= daysOfMonth[index];
-            index += 1;
-        }
-    }
-    // Current Month
-    if (extraDays > 0) {
-        month += 1;
-        date = extraDays;
-    }
-    else {
-        if (month === 2 && flag === 1) {
-            date = 29;
-        }
-        else {
-            date = daysOfMonth[month - 1];
-        }
-    }
-    // Calculating HH:MM:SS
-    hours = Math.floor(extraTime / 3600);
-    minutes = Math.floor((extraTime % 3600) / 60);
-    secondss = Math.floor((extraTime % 3600) % 60);
-    //add leading 0 to month, date, hour, minute, and seconds
-    let monthStr, dateStr, hoursStr, minutesStr, secondsStr;
-    if (month < 10) { monthStr = "0" + JSON.stringify(month); } else { monthStr = JSON.stringify(month); }
-    if (date < 10) { dateStr = "0" + JSON.stringify(date); } else { dateStr = JSON.stringify(date); }
-    if (hours < 10) { hoursStr = "0" + JSON.stringify(hours); } else { hoursStr = JSON.stringify(hours); }
-    if (minutes < 10) { minutesStr = "0" + JSON.stringify(minutes); } else { minutesStr = JSON.stringify(minutes); }
-    if (secondss < 10) { secondsStr = "0" + JSON.stringify(secondss); } else { secondsStr = JSON.stringify(secondss); }
-
-    ans += JSON.stringify(currYear);
-    ans += "-";
-    ans += monthStr;
-    ans += "-";
-    ans += dateStr;
-    ans += " ";
-    ans += hoursStr;
-    ans += ":";
-    ans += minutesStr;
-    ans += ":";
-    ans += secondsStr;
-    // Return the time
-    return ans;
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -423,6 +286,11 @@ function setTimer(is_reverse, delay_hour) {
 }
 
 function scheduleScript() {
+    // This script is run at random moment during the first 15 minutes after 23:00
+    let minrand = JSON.stringify(Math.floor(Math.random() * 15));
+    let secrand = JSON.stringify(Math.floor(Math.random() * 59));
+    let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
+    let script_number = Shelly.getCurrentScriptId();
     print("Creating schedule for this script with the following CRON", script_schedule);
     Shelly.call("Schedule.create", {
         "id": 3, "enable": true, "timespec": script_schedule,

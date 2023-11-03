@@ -25,6 +25,7 @@ let totalHours;
 let heatingTimes = [];
 let data_indx;
 let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
+let script_number = Shelly.getCurrentScriptId();
 
 function addLeadingZero(number) {
     return number < 10 ? "0" + JSON.stringify(number) : JSON.stringify(number);
@@ -51,12 +52,12 @@ function find_cheapest() {
     print("Shelly local date and time ", shellyLocaltime);
 
     // proper date-time format for Elering query
-    let eleringTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
-    let eleringTimePlusDay = new Date((shellyUnixtimeUTC + timezoneSeconds + (secondsInDay * (addDays + 1))) * 1000).toISOString().slice(0, 10);
+    let isoTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
+    let isoTimePlusDay = new Date((shellyUnixtimeUTC + timezoneSeconds + (secondsInDay * (addDays + 1))) * 1000).toISOString().slice(0, 10);
     let hourStart = JSON.stringify(24 - timezone);
     let hourEnd = JSON.stringify(24 - timezone - 1);
-    dateStart = eleringTime + "T" + hourStart + ":00Z";
-    dateEnd = eleringTimePlusDay + "T" + hourEnd + ":00Z";
+    dateStart = isoTime + "T" + hourStart + ":00Z";
+    dateEnd = isoTimePlusDay + "T" + hourEnd + ":00Z";
 
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
@@ -66,9 +67,8 @@ function find_cheapest() {
             print("Fetching market prices failed. Adding default heating windows.");
             setTimer(is_reverse, heatingTime);
             for (let i = 0; i < countWindows; i++) {
-                let unixtime = dateTimeToUnixTime(year, month, date, (i * heatingWindow) - 2, 0);
-                // filling up array with the unixtimestamps
-                heatingTimes.push({ timestamp: unixtime });
+                // filling up array with the hours
+                heatingTimes.push({ hour: i * heatingWindow, price: "price unknown" });
             }
         }
         else {
@@ -83,7 +83,7 @@ function find_cheapest() {
             if (heatingWindow <= 0) {
                 for (let a = 0; a < pricesArray.length; a++) {
                     if ((pricesArray[a].price < alwaysOnMaxPrice) && !(pricesArray[a].price > alwaysOffMinPrice)) {
-                        heatingTimes.push({ timestamp: pricesArray[a].timestamp, price: pricesArray[a].price });
+                        heatingTimes.push({ hour: new Date((pricesArray[a].timestamp) * 1000).getHours(), price: pricesArray[a].price });
                     }
                 }
             }
@@ -102,7 +102,7 @@ function find_cheapest() {
                 let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
                 for (let a = 0; a < sorted.length; a++) {
                     if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice) && !(sorted[a].price > alwaysOffMinPrice)) {
-                        heatingTimes.push({ timestamp: sorted[a].timestamp, price: sorted[a].price });
+                        heatingTimes.push({ hour: new Date((sorted[a].timestamp) * 1000).getHours(), price: sorted[a].price });
                     }
                 }
             }
@@ -152,15 +152,8 @@ function find_cheapest() {
 // Add schedulers, switching them on or off is depends on the "is_reverse" parameter
 function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
-        let hour, price;
-        if (sorted_prices.length > 0) {
-            price = sorted_prices[i].price;
-            hour = new Date((sorted_prices[i].timestamp + timezoneSeconds) * 1000).getHours();
-        }
-        else {
-            hour = JSON.stringify(start_indx);
-            price = "no price.";
-        }
+        let price = sorted_prices[i].price;
+        let hour = sorted_prices[i].hour;
         print("Scheduled start at: ", hour, " price: ", price);
         // Set the start time crontab
         let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
@@ -178,15 +171,6 @@ function addSchedules(sorted_prices, start_indx, data_indx) {
         )
     }
     sorted_prices = null;
-}
-
-function dateTimeToUnixTime(year, month, day, hh, mm) {
-    let month_yday = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    let year_adj = year + 4800;  /* Ensure positive year, multiple of 400. */
-    let febs = year_adj - (month <= 2 ? 1 : 0);  /* Februaries since base. */
-    let leap_days = 1 + Math.floor(febs / 4) - Math.floor(febs / 100) + Math.floor(febs / 400);
-    let days = 365 * year_adj + leap_days + month_yday[month - 1] + day - 1;
-    return (days - 2472692) * 86400 + hh * 3600 + mm * 60;  /* Adjust to Unix epoch. */
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -256,7 +240,6 @@ function scheduleScript() {
     let minrand = JSON.stringify(Math.floor(Math.random() * 15));
     let secrand = JSON.stringify(Math.floor(Math.random() * 59));
     let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
-    let script_number = Shelly.getCurrentScriptId();
     print("Creating schedule for this script with the following CRON", script_schedule);
     Shelly.call("Schedule.create", {
         "id": 3, "enable": true, "timespec": script_schedule,

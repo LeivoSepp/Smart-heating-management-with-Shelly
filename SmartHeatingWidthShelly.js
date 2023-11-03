@@ -9,9 +9,9 @@
 let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
 let heatingTime = 5;            // heating time in each time window (hours)
-let alwaysOnMaxPrice = 1;       // shelly is always on if energy price lower than this value
+let alwaysOnMaxPrice = 5;       // shelly is always on if energy price lower than this value
 let alwaysOffMinPrice = 300;    // shelly is always off if energy price higher than this value
-let is_reverse = true;          // Some heating systems requires reversed relay.
+let is_reverse = false;          // Some heating systems requires reversed relay.
 let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
 
 // If getting electricity prices from Elering fails, then heating starts at the beginning of heating window.

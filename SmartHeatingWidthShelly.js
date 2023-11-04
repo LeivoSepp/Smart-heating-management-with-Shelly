@@ -9,15 +9,15 @@
 let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
 let heatingTime = 5;            // heating time in each time window (hours)
-let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value (transmission rate not included)
-let alwaysOffMinPrice = 300;    // always off if energy price higher than this value (transmission rate not included)
+let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value (transmission fee not included)
+let alwaysOffMinPrice = 300;    // always off if energy price higher than this value (transmission fee not included)
 let is_reverse = false;          // Some heating systems requires reversed relay.
 let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
-let dayRate = 56;               // Day electricity transmission rate without tax (EUR/MWh)
-let nightRate = 33;             // Night electricity transmission rate without tax (EUR/MWh)
+let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)
+let nightRate = 33;             // Night electricity transmission fee without tax (EUR/MWh)
 
 /*
-Elektrilevi electricity transmission rates:
+Elektrilevi electricity transmission fees:
 Võrk1 
 let dayRate = 72;
 let nightRate = 72;
@@ -184,7 +184,7 @@ function priceCalculation(res, err, msg) {
             //price
             activePos = res.body_b64.indexOf(";\"", activePos) + 2;
             row[1] = Number(res.body_b64.substring(activePos, res.body_b64.indexOf("\"", activePos)).replace(",", "."));
- 
+
             //Add transfer fees (if any)
             let hour = new Date(row[0] * 1000).getHours();
             let day = new Date(row[0] * 1000).getDay();
@@ -209,7 +209,11 @@ function priceCalculation(res, err, msg) {
             for (let a = 0; a < pricesArray.length; a++) {
                 if ((pricesArray[a][1] < alwaysOnMaxPrice + nightRate) && !(pricesArray[a][1] > alwaysOffMinPrice - dayRate)) {
                     heatingTimes.push([new Date((pricesArray[a][0]) * 1000).getHours(), pricesArray[a][1]]);
+                    print("Energy price + transfer fee " + pricesArray[a][1] + " EUR/MWh at " + new Date((pricesArray[a][0]) * 1000).getHours() + " is less than min price and used for heating.")
                 }
+            }
+            if (!heatingTimes.length) {
+                print("No energy prices below min price level. No heating.")
             }
         }
         //if time windows are used
@@ -229,7 +233,12 @@ function priceCalculation(res, err, msg) {
 
             for (let a = 0; a < sorted.length; a++) {
                 if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push([new Date((sorted[a][0]) * 1000).getHours(),  sorted[a][1]]);
+                    heatingTimes.push([new Date((sorted[a][0]) * 1000).getHours(), sorted[a][1]]);
+                }
+                if (a < heatingHours) {
+                    print("Energy price + transfer fee " + heatingTimes[i * heatingWindow + a][1] + " EUR/MWh at " + new Date((heatingTimes[i * heatingWindow + a][0]) * 1000).getHours() + " is the cheapest price for this time period " + (i * heatingWindow) + "-" + (hoursInWindow) + " and used for heating.")
+                } else {
+                    print("Energy price + transfer fee " + heatingTimes[i * heatingWindow + a][1] + " EUR/MWh at " + new Date((heatingTimes[i * heatingWindow + a][0]) * 1000).getHours() + " is less than min price and used for heating.")
                 }
             }
         }

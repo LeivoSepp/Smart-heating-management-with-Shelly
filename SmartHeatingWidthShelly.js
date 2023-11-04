@@ -105,6 +105,9 @@ function start() {
         }
         catch (error) {
             print(error);
+            // just continue, doesn't matter the error
+            print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
+            getElering();
         }
     } else {
         getElering();
@@ -112,20 +115,25 @@ function start() {
 }
 
 function weatherForecast(res, err, msg) {
-    if (err != 0 || res === null || res.code != 200 || JSON.parse(res.body)["error"]) {
+    try {
+        if (err === 0 && res != null && res.code === 200 && !JSON.parse(res.body)["error"]) {
+            let jsonForecast = JSON.parse(res.body);
+            // temperature forecast, averaging tomorrow min and max temperatures 
+            let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
+            // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
+            heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
+            heatingTime = Math.ceil(heatingTime);
+            if (heatingTime > 24) { heatingTime = 24; }
+            print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
+            res = null;
+            jsonForecast = null;
+        }
+        else {
+            print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
+        }
+    } catch (error) {
+        print(error);
         print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
-    }
-    else {
-        let jsonForecast = JSON.parse(res.body);
-        // temperature forecast, averaging tomorrow min and max temperatures 
-        let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
-        // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
-        heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
-        heatingTime = Math.ceil(heatingTime);
-        if (heatingTime > 24) { heatingTime = 24; }
-        print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
-        res = null;
-        jsonForecast = null;
     }
     getElering();
 }
@@ -138,6 +146,8 @@ function getElering() {
     }
     catch (error) {
         print(error);
+        print("Fetching market prices failed. Adding dummy timeslotA.");
+        priceCalculation();
     }
 }
 
@@ -254,9 +264,11 @@ function priceCalculation(res, err, msg) {
     // Kinda timer-hack is used to execute RPC calls 24 times 
     totalHours = heatingTimes.length;
     if (totalHours > 0) {
-        data_indx = (totalHours - 4) < 1 ? totalHours : 4;
-        print("Starting to add hours 0-3");
-        addSchedules(heatingTimes, 0, data_indx);
+        Timer.set(1 * 1000, false, function () {
+            data_indx = (totalHours - 4) < 1 ? totalHours : 4;
+            print("Starting to add hours 0-3");
+            addSchedules(heatingTimes, 0, data_indx);
+        });
     }
     if (totalHours - 4 > 0) {
         Timer.set(5 * 1000, false, function () {

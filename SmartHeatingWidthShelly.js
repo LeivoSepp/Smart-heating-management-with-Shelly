@@ -53,7 +53,7 @@ let powerFactor = 0.2;
 
 // some global variables
 let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min&timezone=auto";
-let eleringUrl = "https://dashboard.elering.ee/api/nps/price";
+let eleringUrl = "https://dashboard.elering.ee/api/nps/price/csv?fields=" + country;
 let timezoneSeconds;
 let data_indx;
 let sorted = [];
@@ -100,7 +100,7 @@ function start() {
         weatherDate = isoTimePlusDay;
         // calling Open-Meteo weather forecast to get tomorrow min and max temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
-        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate }, weatherForecast);
+        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate, timeout: 5, ssl_ca: "*" }, weatherForecast);
     } else {
         getElering();
     }
@@ -128,11 +128,16 @@ function weatherForecast(result, error_code, error) {
 function getElering() {
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
-    Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd }, priceCalculation);
+    try {
+        Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd, timeout: 5, ssl_ca: "*" }, priceCalculation);
+    }
+    catch (error) {
+        print(error);
+    }
 }
 
-function priceCalculation(result, error_code, error) {
-    if (result === null) {
+function priceCalculation(res, error_code, error) {
+    if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
         // If there is no result, then use the default_start_time and heatingTime
         print("Fetching market prices failed. Adding dummy timeslot.");
         setTimer(is_reverse, heatingTime);
@@ -145,28 +150,82 @@ function priceCalculation(result, error_code, error) {
         // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
         // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
         print("We got market prices, going to sort them from cheapest to most expensive.");
-        let jsonElering = JSON.parse(result.body);
-        result = null; //clear memory
-        let pricesArray = jsonElering["data"][country];
-        jsonElering = null; //clear memory
 
-        //add electriciy transmission rate to market price
-        for (let i = 0; i < pricesArray.length; i++) {
-            let hour = new Date((pricesArray[i].timestamp) * 1000).getHours();
-            let day = new Date((pricesArray[i].timestamp) * 1000).getDay();
+        //Converting base64 to text
+        res.body_b64 = atob(res.body_b64);
+
+        //Discarding header
+        res.body_b64 = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
+        
+        let pricesArray = [];
+        let activePos = 0;
+        while (activePos >= 0) {
+            res.body_b64 = res.body_b64.substring(activePos);
+            activePos = 0;
+
+            let row = [0, 0];
+            activePos = res.body_b64.indexOf("\"", activePos) + 1;
+
+            if (activePos === 0) {
+                //" character not found -> end of data
+                break;
+            }
+
+            //epoch
+            row[0] = Number(res.body_b64.substring(activePos, res.body_b64.indexOf("\"", activePos)));
+
+            //skip "; after timestamp
+            activePos = res.body_b64.indexOf("\"", activePos) + 2;
+
+            //price
+            activePos = res.body_b64.indexOf(";\"", activePos) + 2;
+            row[1] = Number(res.body_b64.substring(activePos, res.body_b64.indexOf("\"", activePos)).replace(",", "."));
+            //Converting price to c/kWh and adding VAT to price
+            //row[1] = row[1] / 10.0 * (100 + (row[1] > 0 ? _.c.vat : 0)) / 100.0;
+
+            //Add transfer fees (if any)
+            let hour = new Date(row[0] * 1000).getHours();
+            let day = new Date(row[0] * 1000).getDay();
+
             if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
-                pricesArray[i].price += nightRate;
+                //night
+                row[1] += nightRate;
             }
             else {
-                pricesArray[i].price += dayRate;
+                //day
+                row[1] += dayRate;
             }
+
+            //Adding stuff
+            pricesArray.push(row);
+
+            //find next row
+            activePos = res.body_b64.indexOf("\n", activePos);
         }
+        res = null;
+
+        // let jsonElering = JSON.parse(result.body);
+        // result = null; //clear memory
+        // let pricesArray = jsonElering["data"][country];
+        // jsonElering = null; //clear memory
+
+        //add electriciy transmission rate to market price
+        // for (let i = 0; i < pricesArray.length; i++) {
+        //     let hour = new Date((pricesArray[i].timestamp) * 1000).getHours();
+        //     let day = new Date((pricesArray[i].timestamp) * 1000).getDay();
+        //     if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
+        //         pricesArray[i].price += nightRate;
+        //     }
+        //     else {
+        //         pricesArray[i].price += dayRate;
+        //     }
+        // }
 
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
         if (heatingWindow <= 0) {
             for (let a = 0; a < pricesArray.length; a++) {
-                if ((pricesArray[a].price < alwaysOnMaxPrice + nightRate) && !(pricesArray[a].price > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push({ hour: new Date((pricesArray[a].timestamp) * 1000).getHours(), price: pricesArray[a].price });
+                if ((pricesArray[a][1] < alwaysOnMaxPrice + nightRate) && !(pricesArray[a][1] > alwaysOffMinPrice - dayRate)) {
+                    heatingTimes.push({ hour: new Date((pricesArray[a][0]) * 1000).getHours(), price: pricesArray[a][1] });
                 }
             }
         }
@@ -180,14 +239,14 @@ function priceCalculation(result, error_code, error) {
                 arrayWindow[k] = pricesArray[j];
                 k++;
             }
-            let sorted = sort(arrayWindow, "price");
+            let sorted = sort(arrayWindow, 1); //sort by price
             let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
 
-            print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0].price, " EUR/MWh (energy price + transmission) at ", new Date((sorted[0].timestamp + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
+            print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
             for (let a = 0; a < sorted.length; a++) {
-                if ((a < heatingHours || sorted[a].price < alwaysOnMaxPrice + nightRate) && !(sorted[a].price > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push({ hour: new Date((sorted[a].timestamp) * 1000).getHours(), price: sorted[a].price });
+                if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
+                    heatingTimes.push({ hour: new Date((sorted[a][0]) * 1000).getHours(), price: sorted[a][1] });
                 }
             }
         }
@@ -237,8 +296,8 @@ function priceCalculation(result, error_code, error) {
 // Add actual schedulers
 function addSchedules(sorted_prices, start_indx, data_indx) {
     for (let i = start_indx; i < data_indx; i++) {
-        let price = sorted_prices[i].price;
-        let hour = sorted_prices[i].hour;
+        let price = sorted_prices[i][1];
+        let hour = sorted_prices[i][0];
         print("Scheduled start at: ", hour, " price: ", price, " EUR/MWh (energy price + transmission).");
         // Set the start time crontab
         let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";

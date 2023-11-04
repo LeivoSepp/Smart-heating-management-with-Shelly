@@ -153,8 +153,6 @@ function priceCalculation(res, err, msg) {
         res.headers = null;
         res.message = null;
         msg = null;
-        // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
-        // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
         print("We got market prices, going to sort them from cheapest to most expensive.");
 
         //Converting base64 to text
@@ -186,9 +184,7 @@ function priceCalculation(res, err, msg) {
             //price
             activePos = res.body_b64.indexOf(";\"", activePos) + 2;
             row[1] = Number(res.body_b64.substring(activePos, res.body_b64.indexOf("\"", activePos)).replace(",", "."));
-            //Converting price to c/kWh and adding VAT to price
-            //row[1] = row[1] / 10.0 * (100 + (row[1] > 0 ? _.c.vat : 0)) / 100.0;
-
+ 
             //Add transfer fees (if any)
             let hour = new Date(row[0] * 1000).getHours();
             let day = new Date(row[0] * 1000).getDay();
@@ -208,24 +204,6 @@ function priceCalculation(res, err, msg) {
             activePos = res.body_b64.indexOf("\n", activePos);
         }
         res = null;
-
-        // let jsonElering = JSON.parse(result.body);
-        // result = null; //clear memory
-        // let pricesArray = jsonElering["data"][country];
-        // jsonElering = null; //clear memory
-
-        //add electriciy transmission rate to market price
-        // for (let i = 0; i < pricesArray.length; i++) {
-        //     let hour = new Date((pricesArray[i].timestamp) * 1000).getHours();
-        //     let day = new Date((pricesArray[i].timestamp) * 1000).getDay();
-        //     if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
-        //         pricesArray[i].price += nightRate;
-        //     }
-        //     else {
-        //         pricesArray[i].price += dayRate;
-        //     }
-        // }
-
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
         if (heatingWindow <= 0) {
             for (let a = 0; a < pricesArray.length; a++) {

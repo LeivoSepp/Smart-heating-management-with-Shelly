@@ -129,24 +129,30 @@ function getElering() {
     // Let's get the electricity market price from Elering
     print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
     try {
-        Shelly.call("HTTP.GET", { url: eleringUrl + "?start=" + dateStart + "&end=" + dateEnd, timeout: 5, ssl_ca: "*" }, priceCalculation);
+        Shelly.call("HTTP.GET", { url: eleringUrl + "&start=" + dateStart + "&end=" + dateEnd, timeout: 5, ssl_ca: "*" }, priceCalculation);
     }
     catch (error) {
         print(error);
     }
 }
 
-function priceCalculation(res, error_code, error) {
+function priceCalculation(res, err, msg) {
     if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
+        res.headers = null;
+        res.message = null;
+        msg = null;
         // If there is no result, then use the default_start_time and heatingTime
         print("Fetching market prices failed. Adding dummy timeslot.");
         setTimer(is_reverse, heatingTime);
         for (let i = 0; i < countWindows; i++) {
             // filling up array with the hours
-            heatingTimes.push({ hour: i * heatingWindow, price: "price unknown" });
+            heatingTimes.push([i * heatingWindow, "price unknown"]);
         }
     }
     else {
+        res.headers = null;
+        res.message = null;
+        msg = null;
         // let json = "{success: true,data: {ee: [{timestamp: 1673301600,price: 80.5900},"+
         // "{timestamp: 1673305200,price: 76.0500},{timestamp: 1673308800,price: 79.9500}]}}";   
         print("We got market prices, going to sort them from cheapest to most expensive.");
@@ -156,7 +162,7 @@ function priceCalculation(res, error_code, error) {
 
         //Discarding header
         res.body_b64 = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
-        
+
         let pricesArray = [];
         let activePos = 0;
         while (activePos >= 0) {
@@ -198,7 +204,6 @@ function priceCalculation(res, error_code, error) {
 
             //Adding stuff
             pricesArray.push(row);
-
             //find next row
             activePos = res.body_b64.indexOf("\n", activePos);
         }
@@ -225,7 +230,7 @@ function priceCalculation(res, error_code, error) {
         if (heatingWindow <= 0) {
             for (let a = 0; a < pricesArray.length; a++) {
                 if ((pricesArray[a][1] < alwaysOnMaxPrice + nightRate) && !(pricesArray[a][1] > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push({ hour: new Date((pricesArray[a][0]) * 1000).getHours(), price: pricesArray[a][1] });
+                    heatingTimes.push([new Date((pricesArray[a][0]) * 1000).getHours(), pricesArray[a][1]]);
                 }
             }
         }
@@ -246,7 +251,7 @@ function priceCalculation(res, error_code, error) {
 
             for (let a = 0; a < sorted.length; a++) {
                 if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push({ hour: new Date((sorted[a][0]) * 1000).getHours(), price: sorted[a][1] });
+                    heatingTimes.push([new Date((sorted[a][0]) * 1000).getHours(),  sorted[a][1]]);
                 }
             }
         }

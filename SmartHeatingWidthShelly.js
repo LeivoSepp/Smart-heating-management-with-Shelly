@@ -1,16 +1,22 @@
-// This script has three different modes: 
-// 1. Using weather forecast, the scipt calculates dynamically heating time for the next day. 
-// 2. Splitting day into time windows to turn on heating for cheapest hour in each window.
-// 3. Using price min-max levels to keep the shelly always on or off.
+/*
+This Shelly script downloads energy market prices from Elering and 
+will turn on heating for cheapest hours in a day using different algorithms.
 
-// It's scheduled to run daily after 23:00 to set heating timeslots for next day.
-// updated by Leivo Sepp, 03.11.2023
+These are the three algorithms:
+1. Heating time for the next day is calculated dyanmically based on the weather forecast.
+2. Heating is divided into time periods and heating is turned on for cheapest hour in each period.
+3. Heating is based on the min-max price levels to keep Shelly constantly on or off.
+
+It's scheduled to run daily after 23:00 to set heating timeslots for next day.
+created by Leivo Sepp, 03.11.2023
+https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
+*/
 
 let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
 let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
 let heatingTime = 5;            // heating time in each time window (hours)
-let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value (transmission fee not included)
-let alwaysOffMinPrice = 300;    // always off if energy price higher than this value (transmission fee not included)
+let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value EUR/MWh (transfer fee not included)
+let alwaysOffMinPrice = 300;    // always off if energy price higher than this value EUR/MWh (transfer fee not included)
 let is_reverse = false;          // Some heating systems requires reversed relay.
 let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
 let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)
@@ -358,7 +364,6 @@ function sort(array, sortby) {
         j--;
     }
     return array;
-    // Huhh, array is finally sorted
 }
 
 // Delete all the schedulers before adding new ones
@@ -407,7 +412,7 @@ function addLeadingZero(number) {
 
 function stopScript() {
     // Stop this script in 1.5 minute from now
-    Timer.set(100 * 1000, false, function () {
+    Timer.set(60 * 1000, false, function () {
         print("Stopping the script ...");
         Shelly.call("Script.stop", { "id": script_number });
         print("Script stopped.");

@@ -100,18 +100,23 @@ function start() {
         weatherDate = isoTimePlusDay;
         // calling Open-Meteo weather forecast to get tomorrow min and max temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
-        Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate, timeout: 5, ssl_ca: "*" }, weatherForecast);
+        try {
+            Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate, timeout: 5, ssl_ca: "*" }, weatherForecast);
+        }
+        catch (error) {
+            print(error);
+        }
     } else {
         getElering();
     }
 }
 
-function weatherForecast(result, error_code, error) {
-    if (result === null || JSON.parse(result.body)["error"]) {
+function weatherForecast(res, err, msg) {
+    if (err != 0 || res === null || res.code != 200 || JSON.parse(res.body)["error"]) {
         print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
     }
     else {
-        let jsonForecast = JSON.parse(result.body);
+        let jsonForecast = JSON.parse(res.body);
         // temperature forecast, averaging tomorrow min and max temperatures 
         let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
         // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
@@ -119,7 +124,7 @@ function weatherForecast(result, error_code, error) {
         heatingTime = Math.ceil(heatingTime);
         if (heatingTime > 24) { heatingTime = 24; }
         print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
-        result = null;
+        res = null;
         jsonForecast = null;
     }
     getElering();
@@ -229,17 +234,15 @@ function priceCalculation(res, err, msg) {
             let sorted = sort(arrayWindow, 1); //sort by price
             let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
 
-            print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
+            // print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
             for (let a = 0; a < sorted.length; a++) {
                 if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
                     heatingTimes.push([new Date((sorted[a][0]) * 1000).getHours(), sorted[a][1]]);
                 }
-                if (a < heatingHours) {
-                    print("Energy price + transfer fee " + heatingTimes[i * heatingWindow + a][1] + " EUR/MWh at " + new Date((heatingTimes[i * heatingWindow + a][0]) * 1000).getHours() + " is the cheapest price for this time period " + (i * heatingWindow) + "-" + (hoursInWindow) + " and used for heating.")
-                } else {
-                    print("Energy price + transfer fee " + heatingTimes[i * heatingWindow + a][1] + " EUR/MWh at " + new Date((heatingTimes[i * heatingWindow + a][0]) * 1000).getHours() + " is less than min price and used for heating.")
-                }
+                // if ((sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
+                //     print("Energy price + transfer fee " + heatingTimes[(i * heatingWindow) + a][1] + " EUR/MWh at " + heatingTimes[(i * heatingWindow) + a][0] + " is cheaper than min price and used for heating.")
+                // }
             }
         }
         //clearing memory

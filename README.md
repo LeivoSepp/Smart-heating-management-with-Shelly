@@ -1,5 +1,26 @@
 # Smart heating management with Shelly
 
+This Shelly script downloads energy market prices from Elering and will turn on heating for cheapest hours in a day using different algorithms. This is perfect solution to make any heating system smart. 
+There are the three main scenarios:
+1. Heating time for the next day is calculated dyanmically based on the weather forecast. 
+2. Heating is divided into time periods and heating is turned on for cheapest hour in each period.
+3. Heating is based on the min-max price levels to keep Shelly constantly on or off.
+
+Configuration parameters: 
+
+* ``let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv``
+* ``let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)``
+* ``let heatingTime = 5;            // heating time in each time window (hours)``
+* ``let alwaysOnMaxPrice = 10;      // heating is always on if energy price lower than this value (transfer fee not included)``
+* ``let alwaysOffMinPrice = 300;    // heating is always off if energy price higher than this value (transfer fee not included)``
+* ``let is_reverse = false;          // Some heating systems requires reversed relay.``
+* ``let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day``
+* ``let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)``
+* ``let nightRate = 33;             // Night electricity transmission fee without tax (EUR/MWh)``
+
+
+#  ↓↓↓ waiting for update ↓↓↓ 
+
 Smart heating can be based on different algorithms. There are two of them used by myself:
 1. Full day heating, weather forecast and electricity market price. [1. Full Day Heating](#1-full-day-heating)
 2. Many heating windows and electricity market price. [2. Heating Windows](#2-heating-windows)

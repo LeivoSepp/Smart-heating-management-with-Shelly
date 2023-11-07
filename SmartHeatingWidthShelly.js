@@ -13,14 +13,15 @@ https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
 let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
-let heatingWindow = 24;         // time window size (hours), (0 -> only min-max price used, 24 -> one day)
-let heatingTime = 5;            // heating time in each time window (hours)
-let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value EUR/MWh (transfer fee not included)
-let alwaysOffMinPrice = 300;    // always off if energy price higher than this value EUR/MWh (transfer fee not included)
+let heatingWindow = 24;         // time window size in hours, (0 -> only min-max price used, 24 -> one day)
+let heatingTime = 5;            // heating time in hours inside of each time window
+let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value EUR/MWh (without transfer fee and tax)
+let alwaysOffMinPrice = 300;    // always off if energy price higher than this value EUR/MWh (without transfer fee and tax)
 let is_reverse = false;          // Some heating systems requires reversed relay.
 let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
 let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)
 let nightRate = 33;             // Night electricity transmission fee without tax (EUR/MWh)
+let defaultTimer = 1;           // Default timer in hours to flip the Shelly state. Can be 0.5 hours. 
 
 /*
 Elektrilevi electricity transmission fees:
@@ -152,7 +153,7 @@ function getElering() {
     }
     catch (error) {
         print(error);
-        print("Fetching market prices failed. Adding dummy timeslotA.");
+        print("Fetching market prices failed. Adding dummy timeslot.");
         priceCalculation();
     }
 }
@@ -163,7 +164,7 @@ function priceCalculation(res, err, msg) {
         res.message = null;
         msg = null;
         // If there is no result, then use the default_start_time and heatingTime
-        print("Fetching market prices failed. Adding dummy timeslot.");
+        print("Fetching market prices failed. Adding " + countWindows + " timeslot(s) with ", heatingTime, " hour(s).");
         setTimer(is_reverse, heatingTime);
         for (let i = 0; i < countWindows; i++) {
             // filling up array with the hours
@@ -248,7 +249,7 @@ function priceCalculation(res, err, msg) {
                 k++;
             }
             let sorted = sort(arrayWindow, 1); //sort by price
-            let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime;
+            let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime; //finds max hours to heat in that window 
 
             // print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
@@ -421,6 +422,6 @@ function stopScript() {
 
 deleteSchedulers();
 start();
-setTimer(is_reverse, 1);
+setTimer(is_reverse, defaultTimer);
 scheduleScript();
 stopScript();

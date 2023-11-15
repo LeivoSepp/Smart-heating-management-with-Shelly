@@ -273,35 +273,35 @@ function priceCalculation(res, err, msg) {
     if (totalHours > 0) {
         Timer.set(1 * 1000, false, function () {
             data_indx = (totalHours - 4) < 1 ? totalHours : 4;
-            print("Starting to add hours 0-3");
+            print("Adding schedulers batch #1");
             addSchedules(heatingTimes, 0, data_indx);
         });
     }
     if (totalHours - 4 > 0) {
         Timer.set(5 * 1000, false, function () {
             data_indx = (totalHours - 9) < 1 ? totalHours : 9;
-            print("Starting to add hours 4-8");
+            print("Adding schedulers batch #2");
             addSchedules(heatingTimes, 4, data_indx);
         });
     }
     if (totalHours - 9 > 0) {
         Timer.set(12 * 1000, false, function () {
             data_indx = (totalHours - 14) < 1 ? totalHours : 14;
-            print("Starting to add hours 9-13");
+            print("Adding schedulers batch #3");
             addSchedules(heatingTimes, 9, data_indx);
         });
     }
     if (totalHours - 14 > 0) {
         Timer.set(19 * 1000, false, function () {
             data_indx = (totalHours - 19) < 1 ? totalHours : 19;
-            print("Starting to add hours 14-19");
+            print("Adding schedulers batch #4");
             addSchedules(heatingTimes, 14, data_indx);
         });
     }
     if (totalHours - 19 > 0) {
         Timer.set(26 * 1000, false, function () {
             data_indx = (totalHours - 24) < 1 ? totalHours : 24;
-            print("Starting to add hours 19-23");
+            print("Adding schedulers batch #5");
             addSchedules(heatingTimes, 19, data_indx);
         });
     }

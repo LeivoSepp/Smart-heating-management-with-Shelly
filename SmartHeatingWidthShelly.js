@@ -62,16 +62,17 @@ let powerFactor = 0.2;
 let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min&timezone=auto";
 let eleringUrl = "https://dashboard.elering.ee/api/nps/price/csv?fields=" + country;
 let timezoneSeconds;
-let data_indx;
 let sorted = [];
-let heatingTimes = [];
 let weatherDate;
 let dateStart;
 let dateEnd;
-let totalHours;
-let countWindows = heatingWindow <= 0 ? 0 : 24 / heatingWindow;
+let countWindows = heatingWindow <= 0 ? 0 : Math.ceil((24 * 100) / (heatingWindow * 100)); //round always up
 let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
 let script_number = Shelly.getCurrentScriptId();
+
+let schedulersPerCall = 3;
+let schedulersQueue = [];
+let callsCounter = 0;
 
 function start() {
     //find Shelly timezone
@@ -168,14 +169,14 @@ function priceCalculation(res, err, msg) {
         setTimer(is_reverse, heatingTime);
         for (let i = 0; i < countWindows; i++) {
             // filling up array with the hours
-            heatingTimes.push([i * heatingWindow, "price unknown"]);
+            schedulersQueue.push([i * heatingWindow, "price unknown"]);
         }
     }
     else {
         res.headers = null;
         res.message = null;
         msg = null;
-        print("We got market prices, going to sort them from cheapest to most expensive.");
+        print("We got market prices from Elering.");
 
         //Converting base64 to text
         res.body_b64 = atob(res.body_b64);
@@ -212,12 +213,10 @@ function priceCalculation(res, err, msg) {
             let day = new Date(row[0] * 1000).getDay();
 
             if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
-                //night
-                row[1] += nightRate;
+                row[1] += nightRate; //night
             }
             else {
-                //day
-                row[1] += dayRate;
+                row[1] += dayRate; //day
             }
 
             //Adding stuff
@@ -229,12 +228,12 @@ function priceCalculation(res, err, msg) {
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
         if (heatingWindow <= 0) {
             for (let a = 0; a < pricesArray.length; a++) {
-                if ((pricesArray[a][1] < alwaysOnMaxPrice + nightRate) && !(pricesArray[a][1] > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push([new Date((pricesArray[a][0]) * 1000).getHours(), pricesArray[a][1]]);
-                    print("Energy price + transfer fee " + pricesArray[a][1] + " EUR/MWh at " + new Date((pricesArray[a][0]) * 1000).getHours() + " is less than min price and used for heating.")
+                if ((pricesArray[a][1] < alwaysOnMaxPrice) && !(pricesArray[a][1] > alwaysOffMinPrice)) {
+                    schedulersQueue.push([new Date((pricesArray[a][0]) * 1000).getHours(), pricesArray[a][1]]);
+                    print("Energy price + transfer fee " + pricesArray[a][1] + " EUR/MWh at " + new Date((pricesArray[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
                 }
             }
-            if (!heatingTimes.length) {
+            if (!schedulersQueue.length) {
                 print("No energy prices below min price level. No heating.")
             }
         }
@@ -254,11 +253,14 @@ function priceCalculation(res, err, msg) {
             // print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
 
             for (let a = 0; a < sorted.length; a++) {
-                if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
-                    heatingTimes.push([new Date((sorted[a][0]) * 1000).getHours(), sorted[a][1]]);
+                if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice) && !(sorted[a][1] > alwaysOffMinPrice)) {
+                    schedulersQueue.push([new Date((sorted[a][0]) * 1000).getHours(), sorted[a][1]]);
                 }
-                // if ((sorted[a][1] < alwaysOnMaxPrice + nightRate) && !(sorted[a][1] > alwaysOffMinPrice - dayRate)) {
-                //     print("Energy price + transfer fee " + heatingTimes[(i * heatingWindow) + a][1] + " EUR/MWh at " + heatingTimes[(i * heatingWindow) + a][0] + " is cheaper than min price and used for heating.")
+                if (a < heatingHours && sorted[a][1] > alwaysOffMinPrice) {
+                    print("Energy price + transfer fee " + sorted[a][1] + " EUR/MWh at " + new Date((sorted[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
+                }
+                // if ((sorted[a][1] < alwaysOnMaxPrice) && !(sorted[a][1] > alwaysOffMinPrice)) {
+                //     print("Energy price + transfer fee " + schedulersQueue[(i * heatingWindow) + a][1] + " EUR/MWh at " + schedulersQueue[(i * heatingWindow) + a][0] + " is cheaper than min price and used for heating.")
                 // }
             }
         }
@@ -267,67 +269,60 @@ function priceCalculation(res, err, msg) {
         sorted = null;
         arrayWindow = null;
     }
-    // The fact is that Shelly RPC calls are limited to 5.
-    // Kinda timer-hack is used to execute RPC calls 24 times 
-    totalHours = heatingTimes.length;
-    if (totalHours > 0) {
-        Timer.set(1 * 1000, false, function () {
-            data_indx = (totalHours - 4) < 1 ? totalHours : 4;
-            print("Adding schedulers batch #1");
-            addSchedules(heatingTimes, 0, data_indx);
-        });
-    }
-    if (totalHours - 4 > 0) {
-        Timer.set(5 * 1000, false, function () {
-            data_indx = (totalHours - 9) < 1 ? totalHours : 9;
-            print("Adding schedulers batch #2");
-            addSchedules(heatingTimes, 4, data_indx);
-        });
-    }
-    if (totalHours - 9 > 0) {
-        Timer.set(12 * 1000, false, function () {
-            data_indx = (totalHours - 14) < 1 ? totalHours : 14;
-            print("Adding schedulers batch #3");
-            addSchedules(heatingTimes, 9, data_indx);
-        });
-    }
-    if (totalHours - 14 > 0) {
-        Timer.set(19 * 1000, false, function () {
-            data_indx = (totalHours - 19) < 1 ? totalHours : 19;
-            print("Adding schedulers batch #4");
-            addSchedules(heatingTimes, 14, data_indx);
-        });
-    }
-    if (totalHours - 19 > 0) {
-        Timer.set(26 * 1000, false, function () {
-            data_indx = (totalHours - 24) < 1 ? totalHours : 24;
-            print("Adding schedulers batch #5");
-            addSchedules(heatingTimes, 19, data_indx);
-        });
-    }
+    //add all schedulers, 19 is the limit
+    callQueue();
 }
 
-// Add actual schedulers
-function addSchedules(sorted_prices, start_indx, data_indx) {
-    for (let i = start_indx; i < data_indx; i++) {
-        let price = sorted_prices[i][1];
-        let hour = sorted_prices[i][0];
-        print("Scheduled start at: ", hour, " price: ", price, " EUR/MWh (energy price + transmission).");
-        // Set the start time crontab
-        let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
-        // Creating one hour schedulers 
-        Shelly.call("Schedule.Create", {
-            "id": 0, "enable": true, "timespec": timer_start,
-            "calls": [{
-                "method": "Switch.Set",
-                "params": {
-                    id: 0,
-                    "on": !is_reverse
-                }
-            }]
-        })
+function callQueue() {
+    if (callsCounter < 6 - schedulersPerCall) {
+        for (let i = 0; i < schedulersPerCall && i < schedulersQueue.length; i++) {
+            let hour = schedulersQueue[0][0];
+            let price = schedulersQueue.splice(0, 1)[0][1];
+            let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
+            callsCounter++;
+            Shelly.call("Schedule.Create", {
+                "id": 0, "enable": true, "timespec": timer_start,
+                "calls": [{
+                    "method": "Switch.Set",
+                    "params": {
+                        id: 0,
+                        "on": !is_reverse
+                    }
+                }]
+            },
+                function (_, error_code, _, data) {
+                    if (error_code !== 0) {
+                        console.log("Scheduled start at: ", data.hour, ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 19 schedulers is the limit.");
+                    }
+                    else {
+                        console.log("Scheduled start at: ", data.hour, ":00 price: ", data.price, " EUR/MWh (energy price + transmission). SUCCESS");
+                    }
+                    callsCounter--;
+                },
+                { hour: hour, price: price }
+            );
+        }
     }
-    sorted_prices = null;
+
+    //if there are more calls in the queue
+    if (schedulersQueue.length > 0) {
+        Timer.set(
+            1000, //the delay
+            false,
+            function () {
+                callQueue();
+            }
+        );
+    }
+    else {
+        Timer.set(
+            1000, //the delay
+            false,
+            function () {
+                stopScript();
+            }
+        );
+    }
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -412,16 +407,11 @@ function addLeadingZero(number) {
 }
 
 function stopScript() {
-    // Stop this script in 1.5 minute from now
-    Timer.set(60 * 1000, false, function () {
-        print("Stopping the script ...");
-        Shelly.call("Script.stop", { "id": script_number });
-        print("Script stopped.");
-    });
+    Shelly.call("Script.stop", { "id": script_number });
+    print("Script stopped.");
 }
 
 deleteSchedulers();
-start();
-setTimer(is_reverse, defaultTimer);
 scheduleScript();
-stopScript();
+setTimer(is_reverse, defaultTimer);
+start();

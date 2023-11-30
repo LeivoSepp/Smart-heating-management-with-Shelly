@@ -59,7 +59,8 @@ let startingTemp = 10;
 let powerFactor = 0.2;
 
 // some global variables
-let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min&timezone=auto";
+// temperature is "feels like", humidity and windchill. More information here: https://en.wikipedia.org/wiki/Apparent_temperature
+let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=apparent_temperature_max,apparent_temperature_min&timezone=auto";
 let eleringUrl = "https://dashboard.elering.ee/api/nps/price/csv?fields=" + country;
 let timezoneSeconds;
 let sorted = [];
@@ -106,7 +107,7 @@ function start() {
         let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
         let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
         weatherDate = isoTimePlusDay;
-        // calling Open-Meteo weather forecast to get tomorrow min and max temperatures
+        // calling Open-Meteo weather forecast to get tomorrow min and max "feels like" temperatures
         print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
         try {
             Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate, timeout: 5, ssl_ca: "*" }, weatherForecast);
@@ -126,8 +127,8 @@ function weatherForecast(res, err, msg) {
     try {
         if (err === 0 && res != null && res.code === 200 && !JSON.parse(res.body)["error"]) {
             let jsonForecast = JSON.parse(res.body);
-            // temperature forecast, averaging tomorrow min and max temperatures 
-            let avgTempForecast = (jsonForecast["daily"]["temperature_2m_max"][0] + jsonForecast["daily"]["temperature_2m_min"][0]) / 2;
+            // temperature forecast, averaging temperature with windchill min and max 
+            let avgTempForecast = (jsonForecast["daily"]["apparent_temperature_max"][0] + jsonForecast["daily"]["apparent_temperature_min"][0]) / 2;
             // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
             heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
             heatingTime = Math.ceil(heatingTime);

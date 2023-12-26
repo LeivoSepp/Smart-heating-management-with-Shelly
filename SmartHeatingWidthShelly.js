@@ -1,183 +1,275 @@
 /*
-This Shelly script downloads energy market prices from Elering and 
-will turn on heating for cheapest hours in a day using different algorithms.
+This Shelly script is designed to retrieve energy market prices from Elering and
+activate heating during the most cost-effective hours each day, employing various algorithms. 
 
-These are the three algorithms:
-1. Heating time for the next day is calculated dyanmically based on the weather forecast.
-2. Heating is divided into time periods and heating is turned on for cheapest hour in each period.
-3. Heating is based on the min-max price levels to keep Shelly constantly on or off.
+1. Dynamic calculation of heating time for the next day based on weather forecasts.
+2. Division of heating into time periods, with activation during the cheapest hour within each period.
+3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
+The script executes daily after 23:00 to establish heating timeslots for the following day.
 
-It's scheduled to run daily after 23:00 to set heating timeslots for next day.
-created by Leivo Sepp, 03.11.2023
+created by Leivo Sepp, 25.12.2023
 https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
-let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
-let heatingWindow = 24;         // time window size in hours, (0 -> only min-max price used, 24 -> one day)
-let heatingTime = 5;            // heating time in hours inside of each time window
-let alwaysOnMaxPrice = 10;      // always on if energy price lower than this value EUR/MWh (without transfer fee and tax)
-let alwaysOffMinPrice = 300;    // always off if energy price higher than this value EUR/MWh (without transfer fee and tax)
-let is_reverse = false;          // Some heating systems requires reversed relay.
-let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day
-let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)
-let nightRate = 33;             // Night electricity transmission fee without tax (EUR/MWh)
-let defaultTimer = 1;           // Default timer in hours to flip the Shelly state. Can be 0.5 hours. 
-
 /*
-Elektrilevi electricity transmission fees:
-Võrk1 
-let dayRate = 72;
-let nightRate = 72;
+Elektrilevi electricity transmission fees (EUR/MWh):
+*/
+let vork1 = { dayRt: 72, nightRt: 72 };
+let vork2 = { dayRt: 87, nightRt: 50 };
+let vork2kuu = { dayRt: 56, nightRt: 33 };
+let vork4 = { dayRt: 37, nightRt: 21 };
+let none = { dayRt: 0, nightRt: 0 };
+/**
+USER SETTINGS, START MODIFICATION. 
+ */
+let s = {
+    timePeriod: 24,             // time period size in hours, (0 -> only min-max price used, 24 -> period is one day)
+    heatingTime: 5,             // heating time in hours within each period
+    elektrilevi: vork2kuu,      // Elektrilevi transmission fee: vork1 / vork2 / vork2kuu / vork4 / none
+    alwaysOnMaxPrice: 10,       // always ON if energy price lower than this value EUR/MWh (without transfer fee and tax)
+    alwaysOffMinPrice: 300,     // always OFF if energy price higher than this value EUR/MWh (without transfer fee and tax)
+    isOutputInverted: false,    // many heating systems requires inverted relay (Nibe, Thermia)
+    relayID: 0,                 // Shelly relay ID
+    defaultTimer: 60,           // Default timer in minutes to flip the Shelly state. 
+    country: "ee",              // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
+    isWeatherFcstUsed: false,    // use weather forecast to calculate heating time
+    heatingCurve: 0,            // move heating curve left or right (-10 -> less heating, 10 -> more heating) 
+    powerFactor: 0.5,           // set the heating curve more flat or steep (0 -> flat, 1 -> steep)
+}
+/**
+USER SETTINGS, END OF MODIFICATION. 
 
-Võrk2
-let dayRate = 87;
-let nightRate = 50;
+Heating time dependency on heating curve and outside temperature (power factor 0.5)
 
-Võrk2 kuutasuga
-let dayRate = 56;
-nightRate = 33;
+   |   --------   heating curve   --------   |  
+°C |-10	-8	-6	-4	-2	0	2	4	6	8	10
+______________________________________________
+17 | 0	0	0	0	0	0	0	0	0	0	0
+15 | 0	0	0	0	0	0	0	2	4	6	8
+10 | 0	0	0	0	0	1	3	5	7	9	11
+5  | 0	0	0	0	1	3	5	7	9	11	13
+0  | 0	0	0	2	4	6	8	10	12	14	16
+-5 | 0	0	2	4	6	8	10	12	14	16	18
+-10| 1	3	5	7	9	11	13	15	17	19	21
+-15| 3	5	7	9	11	13	15	17	19	21	23
+-20| 6	8	10	12	14	16	18	20	22	24	24
+-25| 8	10	12	14	16	18	20	22	24	24	24
 
-Võrk4
-let dayRate = 37;
-let nightRate = 21;
+Forecast temp °C is "feels like": more information here: https://en.wikipedia.org/wiki/Apparent_temperature
 */
 
-// If getting electricity prices from Elering fails, then heating starts at the beginning of heating window.
-// If getting weather forecast fails, then default heating time is used
 
-// Following parameters used to calculate heating time only in case the weather forecast is turned on
-// HeatingCurve is used to set proper heating curve for your house. This is very personal and also crucial component.
-// You can start with the default number 5, and take a look how this works for you.
-// If you feel cold, then increase this number. If you feel too warm, then decrease this number.
-// You can see the dependency of temperature and and this parameter from this visualization: 
-// Parameter startingTemp is used as starting point for heating curve.
-// For example if startingTemp = 10, then the heating is not turned on for any temperature warmer than 10 degrees.
-// powerFactor is used to set quadratic equation parabola curve flat or steep. Change it with your own responsibility.
-// Heating hours are calculated by this quadratic equation: (startingTemp-avgTemp)^2 + (heatingCurve / powerFactor) * (startingTemp-avgTemp)
-let heatingCurve = 5;
-let startingTemp = 10;
-let powerFactor = 0.2;
+let _ = {
+    openMeteo: "https://api.open-meteo.com/v1/forecast?daily=apparent_temperature_max&timezone=auto",
+    elering: "https://dashboard.elering.ee/api/nps/price/csv?fields=" + s.country,
+    elUrl: '',
+    omUrl: '',
+    heatTime: '',
+    ctPeriods: s.timePeriod <= 0 ? 0 : Math.ceil((24 * 100) / (s.timePeriod * 100)),
+    tsPrices: '',
+    tsFcst: '',
+    loopRunning: false,
+    dayInSec: 60 * 60 * 24,
+    sId: Shelly.getCurrentScriptId(),
+    pId: "Id" + Shelly.getCurrentScriptId() + ": ",
+    loopFreq: 60, //seconds
+    maxRpcCalls: 3,
+    callsCntr: 0,
+    newScheds: [],
+    schedIDs: [],
+};
 
-// some global variables
-// temperature is "feels like", humidity and windchill. More information here: https://en.wikipedia.org/wiki/Apparent_temperature
-let openMeteoUrl = "https://api.open-meteo.com/v1/forecast?daily=apparent_temperature_max,apparent_temperature_min&timezone=auto";
-let eleringUrl = "https://dashboard.elering.ee/api/nps/price/csv?fields=" + country;
-let timezoneSeconds;
-let sorted = [];
-let weatherDate;
-let dateStart;
-let dateEnd;
-let countWindows = heatingWindow <= 0 ? 0 : Math.ceil((24 * 100) / (heatingWindow * 100)); //round always up
-let shellyUnixtimeUTC = Shelly.getComponentStatus("sys").unixtime;
-let script_number = Shelly.getCurrentScriptId();
-
-let schedulersPerCall = 3;
-let schedulersQueue = [];
-let callsCounter = 0;
-
+/*
+This is the start of the script.
+Get old scheduler IDs from the KVS storage
+*/
 function start() {
-    //find Shelly timezone
-    let shellyLocaltime = new Date(shellyUnixtimeUTC * 1000);
-    let shellyLocalHour = shellyLocaltime.getHours();
-    let shellyUTCHour = shellyLocaltime.toISOString().slice(11, 13);
-    let timezone = shellyLocalHour - shellyUTCHour;
-    if (timezone > 12) { timezone -= 24; }
-    if (timezone < -12) { timezone += 24; }
-    timezoneSeconds = timezone * 60 * 60;
+    Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
+        if (res) {
+            _.schedIDs = JSON.parse(res.value);
+        }
+        delOldSched();
+    });
+}
 
-    // After 23:00 this script will use tomorrow's prices
-    // Running this script before 23:00, today energy prices are used.
-    let addDays = shellyLocalHour >= 23 ? 0 : -1;
-    let secondsInDay = 60 * 60 * 24;
+/*
+Before anything else delete all the old schedulers created by this script. 
+*/
+function delOldSched() {
+    //logic below is a non-blocking method for RPC calls to delete all schedulers one by one
+    if (_.callsCntr < 6 - _.maxRpcCalls) {
+        for (let i = 0; i < _.maxRpcCalls && i < _.schedIDs.length; i++) {
+            let id = _.schedIDs.splice(0, 1)[0];
+            _.callsCntr++;
+            Shelly.call("Schedule.Delete", { id: id },
+                function (res, err, msg, data) {
+                    if (err !== 0) {
+                        print(_.pId, "Schedule ", data.id, " delete FAILED.");
+                    }
+                    else {
+                        print(_.pId, "Schedule ", data.id, " delete SUCCEEDED.");
+                    }
+                    _.callsCntr--;
+                },
+                { id: id }
+            );
+        }
+    }
+    //if there are more calls in the queue
+    if (_.schedIDs.length > 0) {
+        Timer.set(
+            1000, //the delay
+            false,
+            function () {
+                delOldSched();
+            }
+        );
+    }
+    else {
+        main(); //start the main logic
+    }
+}
+
+/**
+This is the main script where all the logic starts.
+This one is called after all the old schedulers are deleted.
+*/
+function main() {
+    //wait until all the schedulers are deleted
+    if (_.callsCntr !== 0) {
+        Timer.set(
+            1000,
+            false,
+            function () {
+                main();
+            })
+        return;
+    }
+    //all old schedulers are now deleted, start the main flow
+    //find Shelly timezone
+    let shEpochUtc = Shelly.getComponentStatus("sys").unixtime;
+    let shDt = new Date(shEpochUtc * 1000);
+    let shHr = shDt.getHours();
+    let shUtcHr = shDt.toISOString().slice(11, 13);
+    let tz = shHr - shUtcHr;
+    if (tz > 12) { tz -= 24; }
+    if (tz < -12) { tz += 24; }
+    let tzInSec = tz * 60 * 60;
+
+    // After 23:00 tomorrow's energy prices are used
+    // before 23:00 today's energy prices are used.
+    let addDays = shHr >= 23 ? 0 : -1;
 
     // build datetime for Elering query
-    let isoTime = new Date((shellyUnixtimeUTC + timezoneSeconds + secondsInDay * addDays) * 1000).toISOString().slice(0, 10);
-    let isoTimePlusDay = new Date((shellyUnixtimeUTC + timezoneSeconds + (secondsInDay * (addDays + 1))) * 1000).toISOString().slice(0, 10);
-    let hourStart = JSON.stringify(24 - timezone);
-    let hourEnd = JSON.stringify(24 - timezone - 1);
-    dateStart = isoTime + "T" + hourStart + ":00Z";
-    dateEnd = isoTimePlusDay + "T" + hourEnd + ":00Z";
+    let isoTime = new Date((shEpochUtc + tzInSec + _.dayInSec * addDays) * 1000).toISOString().slice(0, 10);
+    let isoTimePlusDay = new Date((shEpochUtc + tzInSec + (_.dayInSec * (addDays + 1))) * 1000).toISOString().slice(0, 10);
+    let hrStart = JSON.stringify(24 - tz);
+    let hrEnd = JSON.stringify(24 - tz - 1);
+    let dtStart = isoTime + "T" + hrStart + ":00Z";
+    let dtEnd = isoTimePlusDay + "T" + hrEnd + ":00Z";
+    _.elUrl = _.elering + "&start=" + dtStart + "&end=" + dtEnd;
 
-    print("Shelly local date and time ", shellyLocaltime);
-    shellyLocaltime = null;
-    shellyUnixtimeUTC = null;
+    print(_.pId, "Shelly ", shDt);
+    shDt = null;
+    shEpochUtc = null;
 
-    //the following is used only in case of weather forecast based heating hours
-    if (isWeatherForecastUsed) {
-        let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
-        let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
-        weatherDate = isoTimePlusDay;
-        // calling Open-Meteo weather forecast to get tomorrow min and max "feels like" temperatures
-        print("Starting to fetch weather data for ", weatherDate, " from Open-Meteo.com for your location:", lat, lon, ".")
-        try {
-            Shelly.call("HTTP.GET", { url: openMeteoUrl + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + weatherDate + "&end_date=" + weatherDate, timeout: 5, ssl_ca: "*" }, weatherForecast);
-        }
-        catch (error) {
-            print(error);
-            // just continue, doesn't matter the error
-            print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
-            getElering();
-        }
+    _.heatTime = s.heatingTime;
+    //if weather forecast used for heating hours
+    if (s.isWeatherFcstUsed) {
+        getForecast(isoTimePlusDay);
     } else {
         getElering();
     }
 }
 
-function weatherForecast(res, err, msg) {
+/**
+Get Open-Meteo min and max "feels like" temperatures
+ */
+function getForecast(fcstDt) {
+    let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
+    let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
+    _.omUrl = _.openMeteo + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + fcstDt + "&end_date=" + fcstDt;
+    print(_.pId, "Get forecast from: ", _.omUrl)
     try {
-        if (err === 0 && res != null && res.code === 200 && !JSON.parse(res.body)["error"]) {
-            let jsonForecast = JSON.parse(res.body);
-            // temperature forecast, averaging temperature with windchill min and max 
-            let avgTempForecast = (jsonForecast["daily"]["apparent_temperature_max"][0] + jsonForecast["daily"]["apparent_temperature_min"][0]) / 2;
-            // the next line is basically the "smart quadratic equation" which calculates the hetaing hours based on the temperature
-            heatingTime = ((startingTemp - avgTempForecast) * (startingTemp - avgTempForecast) + (heatingCurve / powerFactor) * (startingTemp - avgTempForecast)) / 100;
-            heatingTime = Math.ceil(heatingTime);
-            if (heatingTime > 24) { heatingTime = 24; }
-            print("Temperture forecast for ", weatherDate, " is ", avgTempForecast, " degrees, and heating is turned on for ", heatingTime, " hours.");
-            res = null;
-            jsonForecast = null;
-        }
-        else {
-            print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
-        }
-    } catch (error) {
-        print(error);
-        print("Getting temperature failed. Using default heatingTime parameter and will turn on heating for ", heatingTime, " hours.");
-    }
-    getElering();
-}
-
-function getElering() {
-    // Let's get the electricity market price from Elering
-    print("Starting to fetch market prices from Elering from ", dateStart, " to ", dateEnd, ".");
-    try {
-        Shelly.call("HTTP.GET", { url: eleringUrl + "&start=" + dateStart + "&end=" + dateEnd, timeout: 5, ssl_ca: "*" }, priceCalculation);
+        Shelly.call("HTTP.GET", { url: _.omUrl, timeout: 5, ssl_ca: "*" }, fcstCalc);
     }
     catch (error) {
-        print(error);
-        print("Fetching market prices failed. Adding dummy timeslot.");
-        priceCalculation();
+        print(_.pId, "Oh no, OpenMeteo ", error);
+        print(_.pId, "Get forecast failed, checking again in ", _.loopFreq, " seconds.");
+        _.loopRunning = false;
     }
 }
 
-function priceCalculation(res, err, msg) {
-    if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
-        res.headers = null;
-        res.message = null;
-        msg = null;
-        // If there is no result, then use the default_start_time and heatingTime
-        print("Fetching market prices failed. Adding " + countWindows + " timeslot(s) with ", heatingTime, " hour(s).");
-        setTimer(is_reverse, heatingTime);
-        for (let i = 0; i < countWindows; i++) {
-            // filling up array with the hours
-            schedulersQueue.push([i * heatingWindow, "price unknown"]);
+/**
+Calculate heating hours
+*/
+function fcstCalc(res, err, msg) {
+    try {
+        if (err != 0 || res === null || res.code != 200 || JSON.parse(res.body)["error"]) {
+            print(_.pId, "Get forecast failed, checking again in ", _.loopFreq, " seconds.");
+            _.loopRunning = false;
         }
+        else {
+            let jsonFcst = JSON.parse(res.body); //open-meteo json response
+            let tempFcst = Math.ceil(jsonFcst["daily"]["apparent_temperature_max"][0]); //round temperature up
+            let dtFcst = (jsonFcst["daily"]["time"][0]);
+
+            //store the timestamp into memory
+            let now = new Date();
+            let dtF = new Date(dtFcst);
+            _.tsFcst = epoch(new Date(dtF.getFullYear(), dtF.getMonth(), dtF.getDate(), now.getHours(), now.getMinutes()));
+            print(_.pId, "We got weather forecast from Open Meteo at ", dtF);
+
+            // calculating heating hours
+            let startTemp = 16;
+            let fcstHeatTime = ((startTemp - tempFcst) * (s.powerFactor - 1) + (startTemp - tempFcst + s.heatingCurve - 2));
+            fcstHeatTime = fcstHeatTime > 24 ? 24 : fcstHeatTime; //heating time can't be more than 24h
+            fcstHeatTime = fcstHeatTime < 0 || tempFcst > startTemp ? 0 : fcstHeatTime; //heating time can't be negative
+            _.heatTime = Math.floor(fcstHeatTime); //round heating time down
+            print(_.pId, "Temperture forecast width windchill is ", tempFcst, " °C, and heating enabled for ", _.heatTime, " hours.");
+
+            //clear memory
+            res = null;
+            jsonFcst = null;
+            getElering(); //call elering
+        }
+    } catch (error) {
+        print(_.pId, "Oh no, OpenMeteo JSON ", error);
+        print(_.pId, "Get forecast failed, checking again in ", _.loopFreq, " seconds.");
+        _.loopRunning = false;
+    }
+}
+
+/**
+Get electricity market price CSV file from Elering. 
+Script will continue regardless of the error.
+ */
+function getElering() {
+    print(_.pId, "Get Elering prices from: ", _.elUrl);
+    try {
+        Shelly.call("HTTP.GET", { url: _.elUrl, timeout: 5, ssl_ca: "*" }, priceCalc);
+    }
+    catch (error) {
+        print(_.pId, "Oh no, Elering ", error);
+        print(_.pId, "Get Elering failed, checking again in ", _.loopFreq, " seconds.");
+        _.loopRunning = false;
+    }
+}
+
+/**
+Price calculation logic.
+Creating time windows etc.
+*/
+function priceCalc(res, err, msg) {
+    if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
+        print(_.pId, "Get Elering failed, checking again in ", _.loopFreq, " seconds.");
+        _.loopRunning = false;
     }
     else {
+        //clear memory
         res.headers = null;
         res.message = null;
         msg = null;
-        print("We got market prices from Elering.");
 
         //Converting base64 to text
         res.body_b64 = atob(res.body_b64);
@@ -185,7 +277,7 @@ function priceCalculation(res, err, msg) {
         //Discarding header
         res.body_b64 = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
 
-        let pricesArray = [];
+        let eleringPrices = [];
         let activePos = 0;
         while (activePos >= 0) {
             res.body_b64 = res.body_b64.substring(activePos);
@@ -212,118 +304,198 @@ function priceCalculation(res, err, msg) {
             //Add transfer fees (if any)
             let hour = new Date(row[0] * 1000).getHours();
             let day = new Date(row[0] * 1000).getDay();
-
             if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
-                row[1] += nightRate; //night
+                row[1] += s.elektrilevi.nightRt; //night fee
             }
             else {
-                row[1] += dayRate; //day
+                row[1] += s.elektrilevi.dayRt; //day fee
             }
 
             //Adding stuff
-            pricesArray.push(row);
+            eleringPrices.push(row);
             //find next row
             activePos = res.body_b64.indexOf("\n", activePos);
         }
-        res = null;
+        res = null; //to save memory
+
+        //store the timestamp into memory
+        let now = new Date();
+        let dtE = new Date(eleringPrices[0][0] * 1000);
+        _.tsPrices = epoch(new Date(dtE.getFullYear(), dtE.getMonth(), dtE.getDate(), now.getHours(), now.getMinutes()));
+        print(_.pId, "We got market prices from Elering ", dtE);
+
+        setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
+
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
-        if (heatingWindow <= 0) {
-            for (let a = 0; a < pricesArray.length; a++) {
-                if ((pricesArray[a][1] < alwaysOnMaxPrice) && !(pricesArray[a][1] > alwaysOffMinPrice)) {
-                    schedulersQueue.push([new Date((pricesArray[a][0]) * 1000).getHours(), pricesArray[a][1]]);
-                    print("Energy price + transfer fee " + pricesArray[a][1] + " EUR/MWh at " + new Date((pricesArray[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
+        if (s.timePeriod <= 0) {
+            for (let a = 0; a < eleringPrices.length; a++) {
+                if ((eleringPrices[a][1] < s.alwaysOnMaxPrice) && !(eleringPrices[a][1] > s.alwaysOffMinPrice)) {
+                    _.newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1]]);
+                    print(_.pId, "Energy price + transfer fee " + eleringPrices[a][1] + " EUR/MWh at " + new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
                 }
             }
-            if (!schedulersQueue.length) {
-                print("No energy prices below min price level. No heating.")
+
+            if (!_.newScheds.length) {
+                print(_.pId, "No energy prices below min price level. No heating.")
             }
         }
-        //if time windows are used
-        let arrayWindow = [];
-        // Create an array for each heating window, sort, and push the smallest prices to waterHeatingTimes[] 
-        for (let i = 0; i < countWindows; i++) {
+
+        //heating windows calculation 
+        let period = [];
+        let sortedPeriod = [];
+        // Create an array for each heating window, sort, and push the prices 
+        for (let i = 0; i < _.ctPeriods; i++) {
             let k = 0;
-            let hoursInWindow = (i + 1) * heatingWindow > 24 ? 24 : (i + 1) * heatingWindow;
-            for (let j = i * heatingWindow; j < hoursInWindow; j++) {
-                arrayWindow[k] = pricesArray[j];
+            let hoursInPeriod = (i + 1) * s.timePeriod > 24 ? 24 : (i + 1) * s.timePeriod;
+            for (let j = i * s.timePeriod; j < hoursInPeriod; j++) {
+                period[k] = eleringPrices[j];
                 k++;
             }
-            let sorted = sort(arrayWindow, 1); //sort by price
-            let heatingHours = sorted.length < heatingTime ? sorted.length : heatingTime; //finds max hours to heat in that window 
+            sortedPeriod = sort(period, 1); //sort by price
+            let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that window 
 
-            // print("For the time period: ", (i * heatingWindow) + "-" + (hoursInWindow), ", cheapest price is", sorted[0][1], " EUR/MWh (energy price + transmission) at ", new Date((sorted[0][0] + timezoneSeconds) * 1000).toISOString().slice(11, 16), ".");
+            for (let a = 0; a < sortedPeriod.length; a++) {
+                if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnMaxPrice) && !(sortedPeriod[a][1] > s.alwaysOffMinPrice)) {
+                    _.newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1]]);
+                }
 
-            for (let a = 0; a < sorted.length; a++) {
-                if ((a < heatingHours || sorted[a][1] < alwaysOnMaxPrice) && !(sorted[a][1] > alwaysOffMinPrice)) {
-                    schedulersQueue.push([new Date((sorted[a][0]) * 1000).getHours(), sorted[a][1]]);
+                //If some hours are too expensive to use for heating, then just let user know for this
+                if (a < heatingHours && sortedPeriod[a][1] > s.alwaysOffMinPrice) {
+                    print(_.pId, "Energy price + transfer fee " + sortedPeriod[a][1] + " EUR/MWh at " + new Date((sortedPeriod[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
                 }
-                if (a < heatingHours && sorted[a][1] > alwaysOffMinPrice) {
-                    print("Energy price + transfer fee " + sorted[a][1] + " EUR/MWh at " + new Date((sorted[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
-                }
-                // if ((sorted[a][1] < alwaysOnMaxPrice) && !(sorted[a][1] > alwaysOffMinPrice)) {
-                //     print("Energy price + transfer fee " + schedulersQueue[(i * heatingWindow) + a][1] + " EUR/MWh at " + schedulersQueue[(i * heatingWindow) + a][0] + " is cheaper than min price and used for heating.")
-                // }
             }
         }
         //clearing memory
-        pricesArray = null;
-        sorted = null;
-        arrayWindow = null;
+        eleringPrices = null;
+        sortedPeriod = null;
+        period = null;
     }
-    //add all schedulers, 19 is the limit
-    callQueue();
+    listScheds();
 }
 
-function callQueue() {
-    if (callsCounter < 6 - schedulersPerCall) {
-        for (let i = 0; i < schedulersPerCall && i < schedulersQueue.length; i++) {
-            let hour = schedulersQueue[0][0];
-            let price = schedulersQueue.splice(0, 1)[0][1];
-            let timer_start = "0 0 " + hour + " * * SUN,MON,TUE,WED,THU,FRI,SAT";
-            callsCounter++;
-            Shelly.call("Schedule.Create", {
-                "id": 0, "enable": true, "timespec": timer_start,
-                "calls": [{
-                    "method": "Switch.Set",
-                    "params": {
-                        id: 0,
-                        "on": !is_reverse
-                    }
-                }]
-            },
-                function (_, error_code, _, data) {
-                    if (error_code !== 0) {
-                        console.log("Scheduled start at: ", data.hour, ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 19 schedulers is the limit.");
-                    }
-                    else {
-                        console.log("Scheduled start at: ", data.hour, ":00 price: ", data.price, " EUR/MWh (energy price + transmission). SUCCESS");
-                    }
-                    callsCounter--;
+/**
+Get all the existing schedulers to check duplications
+ */
+function listScheds() {
+    Shelly.call("Schedule.List", {},
+        function (res, err, msg, data) {
+            if (res === 0) {
+                print(_.pId, "No existing schedulers found.");
+                createScheds([]);
+            }
+            else {
+                print(_.pId, "Found ", res.jobs.length, " schedulers.");
+                createScheds(res.jobs);
+            }
+        },
+    );
+}
+
+/**
+Create all schedulers, the limit is 20.
+ */
+function createScheds(listScheds) {
+    //logic below is a non-blocking method for RPC calls to create all schedulers one by one
+    if (_.callsCntr < 6 - _.maxRpcCalls) {
+        for (let i = 0; i < _.maxRpcCalls && i < _.newScheds.length; i++) {
+            let isExist = false;
+            let hour = _.newScheds[0][0];
+            let price = _.newScheds.splice(0, 1)[0][1]; //cut the array one-by-one
+            let timespec = "0 0 " + hour + " * * *";
+            //looping through existing schedulers
+            for (let k = 0; k < listScheds.length; k++) {
+                let t = listScheds[k].timespec;
+                let p = listScheds[k].calls[0].params;
+                //check if the scheduler exist 
+                if (p.id === s.relayID && t.split(" ").join("") === timespec.split(" ").join("")) {
+                    print(_.pId, "Skipping scheduler at: ", hour + ":00 for relay:", s.relayID, " as it is already exist.");
+                    isExist = true;
+                    break;
+                }
+            }
+            // only create unique schedulers
+            if (!isExist) {
+                _.callsCntr++;
+                Shelly.call("Schedule.Create", {
+                    "id": 0, "enable": true, "timespec": timespec,
+                    "calls": [{
+                        "method": "Switch.Set",
+                        "params": {
+                            "id": s.relayID,
+                            "on": !s.isOutputInverted
+                        }
+                    }]
                 },
-                { hour: hour, price: price }
-            );
+                    function (res, err, msg, data) {
+                        if (err !== 0) {
+                            print(_.pId, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the limit.");
+                        }
+                        else {
+                            print(_.pId, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
+                            _.schedIDs.push(res.id); //create an array of scheduleIDs
+                        }
+                        _.callsCntr--;
+                    },
+                    { hour: hour, price: price }
+                );
+            }
         }
     }
 
     //if there are more calls in the queue
-    if (schedulersQueue.length > 0) {
+    if (_.newScheds.length > 0) {
         Timer.set(
             1000, //the delay
             false,
             function () {
-                callQueue();
+                createScheds(listScheds);
             }
         );
     }
     else {
+        saveSchedIDs();
+    }
+}
+
+/**
+Storing the scheduler IDs in KVS to not loose them in case of power outage
+ */
+function saveSchedIDs() {
+    //wait until all the schedulerIDs are collected
+    if (_.callsCntr !== 0) {
         Timer.set(
-            1000, //the delay
+            1000,
             false,
             function () {
-                stopScript();
-            }
-        );
+                saveSchedIDs();
+            })
+        return;
     }
+    //schedulers are created, store the IDs to KVS
+    Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedIDs) },
+        function () {
+            print(_.pId, "All good now, loop finished.");
+            _.loopRunning = false;
+        });
+}
+
+/**
+Set countdown timer to flip Shelly status
+ */
+function setShellyTimer(isOutInv, timerMin) {
+    let is_on = isOutInv ? "on" : "off";
+    let timerSec = timerMin * 60; //time in seconds
+    print(_.pId, "Set Shelly auto " + is_on + " timer for ", timerMin, " minutes.");
+    Shelly.call("Switch.SetConfig", {
+        "id": 0,
+        config: {
+            "name": "Switch0",
+            "auto_on": isOutInv,
+            "auto_on_delay": timerSec,
+            "auto_off": !isOutInv,
+            "auto_off_delay": timerSec
+        }
+    })
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -363,56 +535,40 @@ function sort(array, sortby) {
     return array;
 }
 
-// Delete all the schedulers before adding new ones
-function deleteSchedulers() {
-    print("Deleting all existing schedules ...");
-    Shelly.call("Schedule.DeleteAll");
+function epoch(date) {
+    return Math.floor((date ? date.getTime() : Date.now()) / 1000.0);
 }
 
-// Set countdown timer to flip the Shelly status
-function setTimer(is_reverse, timerHour) {
-    let is_on = is_reverse ? "on" : "off";
-    let timerSec = timerHour * 60 * 60;
-    print("Set auto " + is_on + " timer for ", timerSec, " seconds.");
-    Shelly.call("Switch.SetConfig", {
-        "id": 0,
-        config: {
-            "name": "Switch0",
-            "auto_on": is_reverse,
-            "auto_on_delay": timerSec,
-            "auto_off": !is_reverse,
-            "auto_off_delay": timerSec
-        }
-    })
+/**
+Getting prices or forecast for today if 
+    * prices or forecast have never been fetched OR 
+    * prices or forecast are not from today or tomorrow OR 
+    * after 23 prices or forecast are not for tomorrow
+ */
+function isUpdtReq(ts) {
+    let chkT = 23;
+    let now = new Date();
+    let isToday = new Date(ts * 1000).getDate() === now.getDate();
+    let isTomorrow = new Date(ts * 1000).getDate() === new Date(now + _.dayInSec * 1000).getDate();
+    let isTsAfter23h = new Date(ts * 1000).getHours() === chkT;
+    let is23h = now.getHours() === chkT;
+    return (is23h && !isTsAfter23h) || !(isToday || isTomorrow);
 }
 
-function scheduleScript() {
-    // This script is run at random moment during the first 15 minutes after 23:00
-    let minrand = Math.floor(Math.random() * 15);
-    let secrand = Math.floor(Math.random() * 59);
-    let script_schedule = secrand + " " + minrand + " " + "23 * * SUN,MON,TUE,WED,THU,FRI,SAT";
-    print("Schedule this script to run daily at 23:", addLeadingZero(minrand) + ":" + addLeadingZero(secrand) + ".");
-    Shelly.call("Schedule.create", {
-        "id": 3, "enable": true, "timespec": script_schedule,
-        "calls": [{
-            "method": "Script.start",
-            "params": {
-                "id": script_number
-            }
-        }]
-    })
+/**
+ This loop runs in every xx seconds
+ */
+function loop() {
+    if (_.loopRunning) {
+        return;
+    }
+    _.loopRunning = true;
+    if (isUpdtReq(_.tsPrices) || (s.isWeatherFcstUsed && isUpdtReq(_.tsFcst))) {
+        start();
+    } else {
+        _.loopRunning = false;
+    }
 }
 
-function addLeadingZero(number) {
-    return number < 10 ? "0" + JSON.stringify(number) : JSON.stringify(number);
-}
-
-function stopScript() {
-    Shelly.call("Script.stop", { "id": script_number });
-    print("Script stopped.");
-}
-
-deleteSchedulers();
-scheduleScript();
-setTimer(is_reverse, defaultTimer);
-start();
+Timer.set(_.loopFreq * 1000, true, loop);
+loop();

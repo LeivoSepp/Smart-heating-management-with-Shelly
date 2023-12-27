@@ -11,12 +11,12 @@ The script runs daily after 23:00 to establish heating timeslots for the followi
 
 Configuration parameters: 
 
-* ``timePeriod: 24`` - time period in hours
-    * ``0`` - only min-max price used, no periods defined.
+* ``timePeriod: 24`` - Specifies the duration of each time period in hours.
+    * ``0`` - Utilizes only the min and max energy prices without specific defined time periods.
     * ``6`` - 6 hour period (4 periods during a day).
     * ``24`` - 24h period, the period is one day. 
 
-* ``heatingTime: 5`` - heating time in hours within each period
+* ``heatingTime: 5`` - Specifies the duration of heating in hours during each designated period.
     * Example1: period is ``6`` hours and heating time ``1`` - heating is activated for one cheap hour in each 6h period. This is good choice for .
     * Example2: period is ``24`` hours with weather forecast enabled - heating is activated for the cheapest hours in a day based on outside temperature.
     * Example3: time period is ``24`` hours and heating time ``8`` - heating is enabled for the 8 cheapest hours within a day. 
@@ -33,29 +33,29 @@ Configuration parameters:
 
 * ``alwaysOffMinPrice: 300`` - Keep heating always OFF if energy price higher than this value (EUR/MWh).
 
-* ``isOutputInverted: false`` - Sets relay state normal or inverted.
+* ``isOutputInverted: false`` - Configures the relay state to either normal or inverted.
     * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
     * ``false`` - Normal relay state. 
 
-* ``relayID: 0`` - Sets Shelly relay ID if Shelly with multiple relays is used. Default value ``0``.
+* ``relayID: 0`` - Configures the Shelly relay ID when employing a Shelly device with multiple relays. Default value ``0``.
 
-* ``defaultTimer: 60`` - Default timer in minutes to flip the Shelly state. Default value ``60`` as the energy price changing in every hour.
+* ``defaultTimer: 60`` - Establishes the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
 
-* ``country: "ee"`` - Set's country for energy prices: 
+* ``country: "ee"`` - Specifies the country for energy prices: 
     * ``ee`` - Estonia
     * ``fi`` - Finland
     * ``lt`` - Lithuania
     * ``lv`` - Latvia
 
-* ``isWeatherFcstUsed: false`` - Using weather forecast to calculate heating time.
+* ``isWeatherFcstUsed: false`` - Using weather forecast to calculate heating duration.
     * ``true`` - using weather forecast to calcukate heating hours
     * ``false`` - using parameter heatingTime to define heating hours
 
-* ``heatingCurve: 0`` - Moves heating curve left or right:
+* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right.
     * ``-10`` - less heating
     * ``10`` - more heating
 
-* ``powerFactor: 0.5`` - Sets the heating curve more flat or steep (default ``0.5``):
+* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep), default ``0.5``.
     * ``0`` - flat
     * ``1`` - steep
 ___

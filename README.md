@@ -1,24 +1,65 @@
 # Smart and cheap heating with Shelly
 
-This Shelly script downloads energy market prices from Elering and will turn on heating for cheapest hours in a day using different algorithms. This is perfect solution to make any heating system smart. 
-This script supports three different scenarios/algorithms:
-1. Heating time for the next day is based on the weather forecast. Cold weather -> more heating hours. 
-2. Heating time (24h) is divided into periods and heating turned on for a number of cheapest hour.
-3. Heating is turned on-off based on the predefined price levels.
+This Shelly script is designed to retrieve energy market prices from Elering and
+activate heating during the most cost-effective hours each day, employing various algorithms. 
+
+1. Dynamic calculation of heating time for the next day based on weather forecasts.
+2. Division of heating into time periods, with activation during the cheapest hour within each period.
+3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
+
+The script runs daily after 23:00 to establish heating timeslots for the following day.
 
 Configuration parameters: 
 
-* ``let country = "ee";             // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv``
-* ``let heatingWindow = 24;         // time period (hours), (0 -> only min-max price used, 24 -> one day)``
-* ``let heatingTime = 5;            // heating time in each time period (hours)``
-* ``let alwaysOnMaxPrice = 10;      // heating is always on if energy price lower than this value (transfer fee not included)``
-* ``let alwaysOffMinPrice = 300;    // heating is always off if energy price higher than this value (transfer fee not included)``
-* ``let isInvertedOutput = false;   // Some heating systems requires inverted relay.``
-* ``let isWeatherForecastUsed = true; //use weather forecast to calculate heating time dynamically for every day``
-* ``let dayRate = 56;               // Day electricity transmission fee without tax (EUR/MWh)``
-* ``let nightRate = 33;             // Night electricity transmission fee without tax (EUR/MWh)``
+* ``timePeriod: 24`` - time period in hours
+    * ``0`` - only min-max price used, no periods defined.
+    * ``6`` - 6 hour period (4 periods during a day).
+    * ``24`` - 24h period, the period is one day. 
 
+* ``heatingTime: 5`` - heating time in hours within each period
+    * Example1: period is ``6`` hours and heating time ``1`` - heating is activated for one cheap hour in each 6h period. This is good choice for .
+    * Example2: period is ``24`` hours with weather forecast enabled - heating is activated for the cheapest hours in a day based on outside temperature.
+    * Example3: time period is ``24`` hours and heating time ``8`` - heating is enabled for the 8 cheapest hours within a day. 
+    * Example4: time period is ``0`` - heating is activated only for the hours which are lower than ``alwaysOnMaxPrice``.
+    
+* ``elektrilevi: vork2kuu`` - Elektrilevi transmission fee, options are the following:
+    * ``vork1`` - Elektrilevi Võrk1
+    * ``vork2`` - Elektrilevi Võrk2
+    * ``vork2kuu`` - Elektrilevi Võrk2 with monthly fee
+    * ``vork4`` - Elektrilevi Võrk4
+    * ``none`` - transmission fee is set to 0
 
+* ``alwaysOnMaxPrice: 10`` - Keep heating always ON if energy price lower than this value (EUR/MWh).
+
+* ``alwaysOffMinPrice: 300`` - Keep heating always OFF if energy price higher than this value (EUR/MWh).
+
+* ``isOutputInverted: false`` - Sets relay state normal or inverted.
+    * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
+    * ``false`` - Normal relay state. 
+
+* ``relayID: 0`` - Sets Shelly relay ID if Shelly with multiple relays is used. Default value ``0``.
+
+* ``defaultTimer: 60`` - Default timer in minutes to flip the Shelly state. Default value ``60`` as the energy price changing in every hour.
+
+* ``country: "ee"`` - Set's country for energy prices: 
+    * ``ee`` - Estonia
+    * ``fi`` - Finland
+    * ``lt`` - Lithuania
+    * ``lv`` - Latvia
+
+* ``isWeatherFcstUsed: false`` - Using weather forecast to calculate heating time.
+    * ``true`` - using weather forecast to calcukate heating hours
+    * ``false`` - using parameter heatingTime to define heating hours
+
+* ``heatingCurve: 0`` - Moves heating curve left or right:
+    * ``-10`` - less heating
+    * ``10`` - more heating
+
+* ``powerFactor: 0.5`` - Sets the heating curve more flat or steep (default ``0.5``):
+    * ``0`` - flat
+    * ``1`` - steep
+___
+___
 #  ↓↓↓ waiting for update ↓↓↓ 
 
 Smart heating can be based on different algorithms. There are two of them used by myself:

@@ -23,18 +23,18 @@ let none = { dayRt: 0, nightRt: 0 };
 USER SETTINGS, START MODIFICATION. 
  */
 let s = {
-    timePeriod: 24,             // time period size in hours, (0 -> only min-max price used, 24 -> period is one day)
-    heatingTime: 5,             // heating time in hours within each period
+    timePeriod: 24,             // duration of each time period in hours, (0 -> only min-max price used, 24 -> period is one day)
+    heatingTime: 5,             // duration of heating in hours during each designated period
     elektrilevi: vork2kuu,      // Elektrilevi transmission fee: vork1 / vork2 / vork2kuu / vork4 / none
-    alwaysOnMaxPrice: 10,       // always ON if energy price lower than this value EUR/MWh (without transfer fee and tax)
-    alwaysOffMinPrice: 300,     // always OFF if energy price higher than this value EUR/MWh (without transfer fee and tax)
-    isOutputInverted: false,    // many heating systems requires inverted relay (Nibe, Thermia)
+    alwaysOnMaxPrice: 10,       // keep heating always ON if energy price lower than this value (EUR/MWh)
+    alwaysOffMinPrice: 300,     // keep heating always OFF if energy price higher than this value (EUR/MWh)
+    isOutputInverted: false,    // configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
-    defaultTimer: 60,           // Default timer in minutes to flip the Shelly state. 
+    defaultTimer: 60,           // default timer duration, in minutes, for toggling the Shelly state 
     country: "ee",              // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
-    isWeatherFcstUsed: false,    // use weather forecast to calculate heating time
-    heatingCurve: 0,            // move heating curve left or right (-10 -> less heating, 10 -> more heating) 
-    powerFactor: 0.5,           // set the heating curve more flat or steep (0 -> flat, 1 -> steep)
+    isWeatherFcstUsed: false,   // Using weather forecast to calculate heating duration.
+    heatingCurve: 0,            // shifting heating curve to the left or right (-10 -> less heating, 10 -> more heating) 
+    powerFactor: 0.5,           // adjusts the heating curve to be either more flat or more aggressive (0 -> flat, 1 -> steep)
 }
 /**
 USER SETTINGS, END OF MODIFICATION. 
@@ -42,18 +42,18 @@ USER SETTINGS, END OF MODIFICATION.
 Heating time dependency on heating curve and outside temperature (power factor 0.5)
 
    |   --------   heating curve   --------   |  
-°C |-10	-8	-6	-4	-2	0	2	4	6	8	10
+°C |-10	-8  -6  -4  -2  0   2   4   6   8   10
 ______________________________________________
-17 | 0	0	0	0	0	0	0	0	0	0	0
-15 | 0	0	0	0	0	0	0	2	4	6	8
-10 | 0	0	0	0	0	1	3	5	7	9	11
-5  | 0	0	0	0	1	3	5	7	9	11	13
-0  | 0	0	0	2	4	6	8	10	12	14	16
--5 | 0	0	2	4	6	8	10	12	14	16	18
--10| 1	3	5	7	9	11	13	15	17	19	21
--15| 3	5	7	9	11	13	15	17	19	21	23
--20| 6	8	10	12	14	16	18	20	22	24	24
--25| 8	10	12	14	16	18	20	22	24	24	24
+17 | 0	0   0   0   0   0   0   0   0   0   0
+15 | 0	0   0   0   0   0   0   2   4   6   8
+10 | 0	0   0   0   0   1   3   5   7   9   11
+5  | 0	0   0   0   1   3   5   7   9   11  13
+0  | 0	0   0   2   4   6   8   10  12  14  16
+-5 | 0	0   2   4   6   8   10  12  14  16  18
+-10| 1	3   5   7   9   11  13  15  17  19  21
+-15| 3	5   7   9   11  13  15  17  19  21  23
+-20| 6	8   10  12  14  16  18  20  22  24  24
+-25| 8	10  12  14  16  18  20  22  24  24  24
 
 Forecast temp °C is "feels like": more information here: https://en.wikipedia.org/wiki/Apparent_temperature
 */

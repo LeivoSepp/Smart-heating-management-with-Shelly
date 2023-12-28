@@ -453,25 +453,26 @@ function createScheds(listScheds) {
         );
     }
     else {
-        saveSchedIDs();
+        setKVS();
     }
 }
 
 /**
 Storing the scheduler IDs in KVS to not loose them in case of power outage
  */
-function saveSchedIDs() {
+function setKVS() {
     //wait until all the schedulerIDs are collected
     if (_.callsCntr !== 0) {
         Timer.set(
             1000,
             false,
             function () {
-                saveSchedIDs();
+                setKVS();
             })
         return;
     }
     //schedulers are created, store the IDs to KVS
+    Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedIDs) },
         function () {
             print(_.pId, "All good now, loop finished.");

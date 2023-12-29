@@ -212,13 +212,10 @@ function fcstCalc(res, err, msg) {
         else {
             let jsonFcst = JSON.parse(res.body); //open-meteo json response
             let tempFcst = Math.ceil(jsonFcst["daily"]["apparent_temperature_max"][0]); //round temperature up
-            let dtFcst = (jsonFcst["daily"]["time"][0]);
 
             //store the timestamp into memory
-            let now = new Date();
-            let dtF = new Date(dtFcst);
-            _.tsFcst = epoch(new Date(dtF.getFullYear(), dtF.getMonth(), dtF.getDate(), now.getHours(), now.getMinutes()));
-            print(_.pId, "We got weather forecast from Open Meteo at ", dtF);
+            _.tsFcst = epoch();
+            print(_.pId, "We got weather forecast from Open Meteo at ", new Date().toString());
 
             // calculating heating hours
             let startTemp = 16;
@@ -319,10 +316,8 @@ function priceCalc(res, err, msg) {
         res = null; //to save memory
 
         //store the timestamp into memory
-        let now = new Date();
-        let dtE = new Date(eleringPrices[0][0] * 1000);
-        _.tsPrices = epoch(new Date(dtE.getFullYear(), dtE.getMonth(), dtE.getDate(), now.getHours(), now.getMinutes()));
-        print(_.pId, "We got market prices from Elering ", dtE);
+        _.tsPrices = epoch();
+        print(_.pId, "We got market prices from Elering ", new Date().toString());
 
         setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
 
@@ -536,8 +531,8 @@ function sort(array, sortby) {
     return array;
 }
 
-function epoch(date) {
-    return Math.floor((date ? date.getTime() : Date.now()) / 1000.0);
+function epoch() {
+    return Math.floor(Date.now() / 1000.0);
 }
 
 /**

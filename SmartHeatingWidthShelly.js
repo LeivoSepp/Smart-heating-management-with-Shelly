@@ -39,7 +39,7 @@ let s = {
 /**
 USER SETTINGS, END OF MODIFICATION. 
 
-Heating time dependency on heating curve and outside temperature (power factor 0.5)
+Heating time dependency on heating curve and outside temperature for 24h (power factor 0.5).
 
    |   --------   heating curve   --------   |  
 °C |-10	-8  -6  -4  -2  0   2   4   6   8   10

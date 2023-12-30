@@ -7,7 +7,7 @@ activate heating during the most cost-effective hours each day, employing variou
 2. Division of heating into time periods, with activation during the cheapest hour within each period.
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 
-The script runs daily after 23:00 to establish heating timeslots for the following day.
+The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.   
 
 Configuration parameters: 
 

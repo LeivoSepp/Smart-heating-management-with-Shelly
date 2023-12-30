@@ -11,23 +11,28 @@ The script runs daily after 23:00 to establish heating timeslots for the followi
 
 Configuration parameters: 
 
-* ``timePeriod: 24`` - Specifies the duration of each time period in hours.
-    * ``0`` - Utilizes only the min and max energy prices without specific defined time periods.
-    * ``6`` - 6 hour period (4 periods during a day).
-    * ``24`` - 24h period, the period is one day. 
-
-* ``heatingTime: 5`` - Specifies the duration of heating in hours during each designated period.
-    * Example1: period is ``6`` hours and heating time ``1`` - heating is activated for one cheap hour in each 6h period. This is good choice for .
-    * Example2: period is ``24`` hours with weather forecast enabled - heating is activated for the cheapest hours in a day based on outside temperature.
-    * Example3: time period is ``24`` hours and heating time ``8`` - heating is enabled for the 8 cheapest hours within a day. 
-    * Example4: time period is ``0`` - heating is activated only for the hours which are lower than ``alwaysOnMaxPrice``.
+* ``heatingMode: HEAT24H_FCST`` - Heating mode, otions are following:
+    * ``HEAT24H_FCST`` - The heating time for 24-hour period depends on the outside temperature.
+    * ``HEAT12H_FCST`` - The heating time for each 12-hour period depends on the outside temperature.
+    * ``HEAT6H_FCST`` - The heating time for each 6-hour period depends on the outside temperature.
+    * ``HEAT24H_12H`` - Heating is activated during the 12 most cost-effective hours in a day.
+    * ``HEAT24H_10H`` - Heating is activated during the 10 most cost-effective hours in a day.
+    * ``HEAT24H_8H`` - Heating is activated during the 8 most cost-effective hours in a day.
+    * ``HEAT12H_6H`` - Heating is activated during the six most cost-effective hours within every 12-hour period.
+    * ``HEAT12H_4H`` - Heating is activated during the four most cost-effective hours within every 12-hour period. 
+    * ``HEAT12H_2H`` - Heating is activated during the two most cost-effective hours within every 12-hour period. 
+    * ``HEAT6H_2H`` - Heating is activated during the two most cost-effective hours within every 6-hour period.
+    * ``HEAT6H_1H`` - Heating is activated during the single most cost-effective hours within every 6-hour period. 
+    * ``HEAT4H_2H`` - Heating is activated during the two most cost-effective hours within every 6-hour period.
+    * ``HEAT4H_1H`` - Heating is activated during the single most cost-effective hours within every 6-hour period.
+    * ``HEATMINMAX`` - Heating is only activated during hours when the price is lower than the specified alwaysOnMaxPrice.
     
-* ``elektrilevi: vork2kuu`` - Elektrilevi transmission fee, options are the following:
-    * ``vork1`` - Elektrilevi Võrk1
-    * ``vork2`` - Elektrilevi Võrk2
-    * ``vork2kuu`` - Elektrilevi Võrk2 with monthly fee
-    * ``vork4`` - Elektrilevi Võrk4
-    * ``none`` - transmission fee is set to 0
+* ``elektrilevi: VORK2KUU`` - Elektrilevi transmission fee, options are the following:
+    * ``VORK1`` - Elektrilevi Võrk1
+    * ``VORK2`` - Elektrilevi Võrk2
+    * ``VORK2KUU`` - Elektrilevi Võrk2 with monthly fee
+    * ``VORK4`` - Elektrilevi Võrk4
+    * ``NONE`` - transmission fee is set to 0
 
 * ``alwaysOnMaxPrice: 10`` - Keep heating always ON if energy price lower than this value (EUR/MWh).
 
@@ -37,9 +42,9 @@ Configuration parameters:
     * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
     * ``false`` - Normal relay state. 
 
-* ``relayID: 0`` - Configures the Shelly relay ID when employing a Shelly device with multiple relays. Default value ``0``.
+* ``relayID: 0`` - Configures the Shelly relay ID when employing a Shelly device with multiple relays. Default ``0``.
 
-* ``defaultTimer: 60`` - Establishes the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
+* ``defaultTimer: 60`` - Configures the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
 
 * ``country: "ee"`` - Specifies the country for energy prices: 
     * ``ee`` - Estonia
@@ -47,15 +52,11 @@ Configuration parameters:
     * ``lt`` - Lithuania
     * ``lv`` - Latvia
 
-* ``isWeatherFcstUsed: false`` - Using weather forecast to calculate heating duration.
-    * ``true`` - using weather forecast to calcukate heating hours
-    * ``false`` - using parameter heatingTime to define heating hours
-
-* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right.
+* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``
     * ``-10`` - less heating
     * ``10`` - more heating
 
-* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep), default ``0.5``.
+* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``
     * ``0`` - flat
     * ``1`` - steep
 ___

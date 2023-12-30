@@ -11,68 +11,104 @@ created by Leivo Sepp, 25.12.2023
 https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
-/*
-Elektrilevi electricity transmission fees (EUR/MWh):
-*/
-let vork1 = { dayRt: 72, nightRt: 72 };
-let vork2 = { dayRt: 87, nightRt: 50 };
-let vork2kuu = { dayRt: 56, nightRt: 33 };
-let vork4 = { dayRt: 37, nightRt: 21 };
-let none = { dayRt: 0, nightRt: 0 };
-/**
-USER SETTINGS, START MODIFICATION. 
- */
+/* Elektrilevi electricity transmission fees (EUR/MWh): */
+let VORK1 = { dayRt: 72, nightRt: 72 };
+let VORK2 = { dayRt: 87, nightRt: 50 };
+let VORK2KUU = { dayRt: 56, nightRt: 33 };
+let VORK4 = { dayRt: 37, nightRt: 21 };
+let NONE = { dayRt: 0, nightRt: 0 };
+
+// timePeriod: duration of each time period in hours, (0 -> only min-max price used, 24 -> period is one day).
+// heatingTime: duration of heating in hours during each designated period.
+// isFcstUsed: true/false - Using weather forecast to calculate heating duration.
+
+/****** HEATING MODES, YOU CAN MODIFY OR CREATE YOUR OWN ******/
+/* Heating schedulers with forecast */
+let HEAT24H_FCST = { timePeriod: 24, heatingTime: 0, isFcstUsed: true };
+let HEAT12H_FCST = { timePeriod: 12, heatingTime: 0, isFcstUsed: true };
+let HEAT6H_FCST = { timePeriod: 6, heatingTime: 0, isFcstUsed: true };
+/* 24h heating schedulers */
+let HEAT24H_12H = { timePeriod: 24, heatingTime: 12, isFcstUsed: false };
+let HEAT24H_10H = { timePeriod: 24, heatingTime: 10, isFcstUsed: false };
+let HEAT24H_8H = { timePeriod: 24, heatingTime: 8, isFcstUsed: false };
+/* 12h heating schedulers */
+let HEAT12H_6H = { timePeriod: 12, heatingTime: 6, isFcstUsed: false };
+let HEAT12H_4H = { timePeriod: 12, heatingTime: 4, isFcstUsed: false };
+let HEAT12H_2H = { timePeriod: 12, heatingTime: 2, isFcstUsed: false };
+/* 6h heating schedulers */
+let HEAT6H_2H = { timePeriod: 6, heatingTime: 2, isFcstUsed: false };
+let HEAT6H_1H = { timePeriod: 6, heatingTime: 1, isFcstUsed: false };
+/* 4h heating schedulers */
+let HEAT4H_2H = { timePeriod: 4, heatingTime: 2, isFcstUsed: false };
+let HEAT4H_1H = { timePeriod: 4, heatingTime: 1, isFcstUsed: false };
+/* Use only min-max price */
+let HEATMINMAX = { timePeriod: 0, heatingTime: 0, isFcstUsed: false };
+
+
+/****** USER SETTINGS, START MODIFICATION ******/
 let s = {
-    timePeriod: 24,             // duration of each time period in hours, (0 -> only min-max price used, 24 -> period is one day)
-    heatingTime: 5,             // duration of heating in hours during each designated period
-    elektrilevi: vork2kuu,      // Elektrilevi transmission fee: vork1 / vork2 / vork2kuu / vork4 / none
-    alwaysOnMaxPrice: 10,       // keep heating always ON if energy price lower than this value (EUR/MWh)
-    alwaysOffMinPrice: 300,     // keep heating always OFF if energy price higher than this value (EUR/MWh)
-    isOutputInverted: false,    // configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
+    heatingMode: HEAT24H_FCST,  // HEATING MODE. Different heating modes described above.
+    elektrilevi: VORK2KUU,      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK2KUU / VORK4 / NONE
+    alwaysOnMaxPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
+    alwaysOffMinPrice: 300,     // Keep heating always OFF if energy price higher than this value (EUR/MWh)
+    isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
-    defaultTimer: 60,           // default timer duration, in minutes, for toggling the Shelly state 
+    defaultTimer: 60,           // Default timer duration, in minutes, for toggling the Shelly state.
     country: "ee",              // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
-    isWeatherFcstUsed: false,   // Using weather forecast to calculate heating duration.
-    heatingCurve: 0,            // shifting heating curve to the left or right (-10 -> less heating, 10 -> more heating) 
-    powerFactor: 0.5,           // adjusts the heating curve to be either more flat or more aggressive (0 -> flat, 1 -> steep)
+    heatingCurve: 0,            // Shifting heating curve to the left or right, check the tables below. Shift by 1 equals 1h. 
+    powerFactor: 0.5,           // Adjusts the heating curve to be either more flat or more aggressive (0 -> flat, 1 -> steep).
 }
-/**
-USER SETTINGS, END OF MODIFICATION. 
+/****** USER SETTINGS, END OF MODIFICATION ******/
 
-Heating time dependency on heating curve and outside temperature for 24h (power factor 0.5).
+/*
+Heating time dependency on heating curve and outside temperature for 24h and 12h (power factor 0.5).
 
-   |   --------   heating curve   --------   |  
-°C |-10	-8  -6  -4  -2  0   2   4   6   8   10
-______________________________________________
-17 | 0	0   0   0   0   0   0   0   0   0   0
-15 | 0	0   0   0   0   0   0   2   4   6   8
-10 | 0	0   0   0   0   1   3   5   7   9   11
-5  | 0	0   0   0   1   3   5   7   9   11  13
-0  | 0	0   0   2   4   6   8   10  12  14  16
--5 | 0	0   2   4   6   8   10  12  14  16  18
--10| 1	3   5   7   9   11  13  15  17  19  21
--15| 3	5   7   9   11  13  15  17  19  21  23
--20| 6	8   10  12  14  16  18  20  22  24  24
--25| 8	10  12  14  16  18  20  22  24  24  24
+    |   ------   24h heating curve   ------   |  
+°C  |-10  -8  -6  -4  -2  0   2   4   6   8   10
+_________________________________________________
+17  | 0   0   0   0   0   0   0   0   0   0   0
+15  | 0   0   0   0   0   0   0   2   4   6   8
+10  | 0   0   0   0   0   1   3   5   7   9   11
+5   | 0   0   0   0   1   3   5   7   9   11  13
+0   | 0   0   0   2   4   6   8   10  12  14  16
+-5  | 0   0   2   4   6   8   10  12  14  16  18
+-10 | 1   3   5   7   9   11  13  15  17  19  21
+-15 | 3   5   7   9   11  13  15  17  19  21  23
+-20 | 6   8   10  12  14  16  18  20  22  24  24
+-25 | 8   10  12  14  16  18  20  22  24  24  24
+
+    |   -------   12h heating curve   -------   |
+°C  |-10  -8  -6  -4  -2  0   2   4   6   8   10
+_________________________________________________
+17  | 0   0   0   0   0   0   0   0   0   0   0
+15  | 0   0   0   0   0   0   0   1   2   3   4
+10  | 0   0   0   0   0   1   2   3   4   5   6
+5   | 0   0   0   0   1   2   3   4   5   6   7
+0   | 0   0   0   1   2   3   4   5   6   7   8
+-5  | 0   0   1   2   3   4   5   6   7   8   9
+-10 | 1   2   3   4   5   6   7   8   9   10  11
+-15 | 2   3   4   5   6   7   8   9   10  11  12
+-20 | 3   4   5   6   7   8   9   10  11  12  12
+-25 | 4   5   6   7   8   9   10  11  12  12  12
 
 Forecast temp °C is "feels like": more information here: https://en.wikipedia.org/wiki/Apparent_temperature
 */
 
 
 let _ = {
-    openMeteo: "https://api.open-meteo.com/v1/forecast?daily=apparent_temperature_max&timezone=auto",
+    openMeteo: "https://api.open-meteo.com/v1/forecast?hourly=apparent_temperature&timezone=auto&forecast_days=1&forecast_hours=" + s.heatingMode.timePeriod,
     elering: "https://dashboard.elering.ee/api/nps/price/csv?fields=" + s.country,
     elUrl: '',
     omUrl: '',
     heatTime: '',
-    ctPeriods: s.timePeriod <= 0 ? 0 : Math.ceil((24 * 100) / (s.timePeriod * 100)),
+    ctPeriods: s.heatingMode.timePeriod <= 0 ? 0 : Math.ceil((24 * 100) / (s.heatingMode.timePeriod * 100)), //period count is up-rounded
     tsPrices: '',
     tsFcst: '',
+    loopFreq: 60, //seconds
     loopRunning: false,
     dayInSec: 60 * 60 * 24,
     sId: Shelly.getCurrentScriptId(),
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
-    loopFreq: 60, //seconds
     maxRpcCalls: 3,
     callsCntr: 0,
     newScheds: [],
@@ -122,8 +158,7 @@ function delOldSched() {
             false,
             function () {
                 delOldSched();
-            }
-        );
+            });
     }
     else {
         main(); //start the main logic
@@ -142,7 +177,7 @@ function main() {
             false,
             function () {
                 main();
-            })
+            });
         return;
     }
     //all old schedulers are now deleted, start the main flow
@@ -173,10 +208,10 @@ function main() {
     shDt = null;
     shEpochUtc = null;
 
-    _.heatTime = s.heatingTime;
+    _.heatTime = s.heatingMode.heatingTime;
     //if weather forecast used for heating hours
-    if (s.isWeatherFcstUsed) {
-        getForecast(isoTimePlusDay);
+    if (s.heatingMode.isFcstUsed) {
+        getForecast();
     } else {
         getElering();
     }
@@ -185,10 +220,10 @@ function main() {
 /**
 Get Open-Meteo min and max "feels like" temperatures
  */
-function getForecast(fcstDt) {
+function getForecast() {
     let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
     let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
-    _.omUrl = _.openMeteo + "&latitude=" + lat + "&longitude=" + lon + "&start_date=" + fcstDt + "&end_date=" + fcstDt;
+    _.omUrl = _.openMeteo + "&latitude=" + lat + "&longitude=" + lon;
     print(_.pId, "Get forecast from: ", _.omUrl)
     try {
         Shelly.call("HTTP.GET", { url: _.omUrl, timeout: 5, ssl_ca: "*" }, fcstCalc);
@@ -211,7 +246,13 @@ function fcstCalc(res, err, msg) {
         }
         else {
             let jsonFcst = JSON.parse(res.body); //open-meteo json response
-            let tempFcst = Math.ceil(jsonFcst["daily"]["apparent_temperature_max"][0]); //round temperature up
+            let aTemp = jsonFcst["hourly"]["apparent_temperature"]; //get 12h or 24h temperatures
+            let sumFcst = 0;
+            for (let i = 0; i < aTemp.length; i++) {
+                sumFcst += aTemp[i];
+            }
+            aTemp = null; //clear memory
+            let tempFcst = Math.ceil(sumFcst / s.heatingMode.timePeriod); //AVG and round temperature up
 
             //store the timestamp into memory
             _.tsFcst = epoch();
@@ -220,9 +261,10 @@ function fcstCalc(res, err, msg) {
             // calculating heating hours
             let startTemp = 16;
             let fcstHeatTime = ((startTemp - tempFcst) * (s.powerFactor - 1) + (startTemp - tempFcst + s.heatingCurve - 2));
-            fcstHeatTime = fcstHeatTime > 24 ? 24 : fcstHeatTime; //heating time can't be more than 24h
             fcstHeatTime = fcstHeatTime < 0 || tempFcst > startTemp ? 0 : fcstHeatTime; //heating time can't be negative
-            _.heatTime = Math.floor(fcstHeatTime); //round heating time down
+            _.heatTime = Math.floor(fcstHeatTime / _.ctPeriods); //divide with periods and round-down heating duration
+            _.heatTime = _.heatTime > s.heatingMode.timePeriod ? s.heatingMode.timePeriod : _.heatTime; //heating time can't be more than period
+
             print(_.pId, "Temperture forecast width windchill is ", tempFcst, " °C, and heating enabled for ", _.heatTime, " hours.");
 
             //clear memory
@@ -255,7 +297,7 @@ function getElering() {
 
 /**
 Price calculation logic.
-Creating time windows etc.
+Creating time periods etc.
 */
 function priceCalc(res, err, msg) {
     if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
@@ -322,10 +364,10 @@ function priceCalc(res, err, msg) {
         setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
 
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
-        if (s.timePeriod <= 0) {
+        if (s.heatingMode.timePeriod <= 0) {
             for (let a = 0; a < eleringPrices.length; a++) {
                 if ((eleringPrices[a][1] < s.alwaysOnMaxPrice) && !(eleringPrices[a][1] > s.alwaysOffMinPrice)) {
-                    _.newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1]]);
+                    _.newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1], 0]);
                     print(_.pId, "Energy price + transfer fee " + eleringPrices[a][1] + " EUR/MWh at " + new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
                 }
             }
@@ -335,23 +377,28 @@ function priceCalc(res, err, msg) {
             }
         }
 
-        //heating windows calculation 
+        //heating periods calculation 
         let period = [];
         let sortedPeriod = [];
-        // Create an array for each heating window, sort, and push the prices 
+
+        //the number of period when the script is executed in case of forecast used
+        let nmPeriod = Math.ceil((new Date().getHours() + 2) / s.heatingMode.timePeriod);
+
+        // Create an array for each heating period, sort, and push the prices 
         for (let i = 0; i < _.ctPeriods; i++) {
+            if (s.heatingMode.isFcstUsed && (i + 1) != nmPeriod) { continue; } //in case of forecast, only one period is calculated
             let k = 0;
-            let hoursInPeriod = (i + 1) * s.timePeriod > 24 ? 24 : (i + 1) * s.timePeriod;
-            for (let j = i * s.timePeriod; j < hoursInPeriod; j++) {
+            let hoursInPeriod = (i + 1) * s.heatingMode.timePeriod > 24 ? 24 : (i + 1) * s.heatingMode.timePeriod;
+            for (let j = i * s.heatingMode.timePeriod; j < hoursInPeriod; j++) {
                 period[k] = eleringPrices[j];
                 k++;
             }
             sortedPeriod = sort(period, 1); //sort by price
-            let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that window 
+            let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that period 
 
             for (let a = 0; a < sortedPeriod.length; a++) {
                 if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnMaxPrice) && !(sortedPeriod[a][1] > s.alwaysOffMinPrice)) {
-                    _.newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1]]);
+                    _.newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
                 }
 
                 //If some hours are too expensive to use for heating, then just let user know for this
@@ -382,8 +429,7 @@ function listScheds() {
                 print(_.pId, "Found ", res.jobs.length, " schedulers.");
                 createScheds(res.jobs);
             }
-        },
-    );
+        });
 }
 
 /**
@@ -395,6 +441,7 @@ function createScheds(listScheds) {
         for (let i = 0; i < _.maxRpcCalls && i < _.newScheds.length; i++) {
             let isExist = false;
             let hour = _.newScheds[0][0];
+            let ctPeriod = _.newScheds[0][2];
             let price = _.newScheds.splice(0, 1)[0][1]; //cut the array one-by-one
             let timespec = "0 0 " + hour + " * * *";
             //looping through existing schedulers
@@ -403,7 +450,7 @@ function createScheds(listScheds) {
                 let p = listScheds[k].calls[0].params;
                 //check if the scheduler exist 
                 if (p.id === s.relayID && t.split(" ").join("") === timespec.split(" ").join("")) {
-                    print(_.pId, "Skipping scheduler at: ", hour + ":00 for relay:", s.relayID, " as it is already exist.");
+                    print(_.pId, "#" + ctPeriod, "Skipping scheduler at: ", hour + ":00 for relay:", s.relayID, " as it is already exist.");
                     isExist = true;
                     break;
                 }
@@ -423,15 +470,15 @@ function createScheds(listScheds) {
                 },
                     function (res, err, msg, data) {
                         if (err !== 0) {
-                            print(_.pId, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the limit.");
+                            print(_.pId, "#" + data.ctPeriod, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the limit.");
                         }
                         else {
-                            print(_.pId, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
+                            print(_.pId, "#" + data.ctPeriod, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
                             _.schedIDs.push(res.id); //create an array of scheduleIDs
                         }
                         _.callsCntr--;
                     },
-                    { hour: hour, price: price }
+                    { hour: hour, price: price, ctPeriod: ctPeriod }
                 );
             }
         }
@@ -444,8 +491,7 @@ function createScheds(listScheds) {
             false,
             function () {
                 createScheds(listScheds);
-            }
-        );
+            });
     }
     else {
         setKVS();
@@ -463,14 +509,14 @@ function setKVS() {
             false,
             function () {
                 setKVS();
-            })
+            });
         return;
     }
     //schedulers are created, store the IDs to KVS
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedIDs) },
         function () {
-            print(_.pId, "All good now, loop finished.");
+            print(_.pId, "All good now, next heating calculation at", nextChkHr() + ":00.");
             _.loopRunning = false;
         });
 }
@@ -491,7 +537,7 @@ function setShellyTimer(isOutInv, timerMin) {
             "auto_off": !isOutInv,
             "auto_off_delay": timerSec
         }
-    })
+    });
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -534,21 +580,26 @@ function sort(array, sortby) {
 function epoch() {
     return Math.floor(Date.now() / 1000.0);
 }
-
+/* Next hour for heating calculation */
+function nextChkHr() {
+    let chkT = s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24;
+    let hr = (Math.ceil((new Date().getHours() + 1) / chkT) * chkT) - 1;
+    return hr > 23 ? 23 : hr;
+}
 /**
 Getting prices or forecast for today if 
     * prices or forecast have never been fetched OR 
     * prices or forecast are not from today or tomorrow OR 
-    * after 23 prices or forecast are not for tomorrow
+    * prices or forecast needs regular update
  */
 function isUpdtReq(ts) {
-    let chkT = 23;
+    let nextHour = nextChkHr();
     let now = new Date();
     let isToday = new Date(ts * 1000).getDate() === now.getDate();
     let isTomorrow = new Date(ts * 1000).getDate() === new Date(now + _.dayInSec * 1000).getDate();
-    let isTsAfter23h = new Date(ts * 1000).getHours() === chkT;
-    let is23h = now.getHours() === chkT;
-    return (is23h && !isTsAfter23h) || !(isToday || isTomorrow);
+    let isTsAfterChkT = new Date(ts * 1000).getHours() === nextHour;
+    let isChkT = now.getHours() === nextHour;
+    return (isChkT && !isTsAfterChkT) || !(isToday || isTomorrow);
 }
 
 /**
@@ -559,7 +610,7 @@ function loop() {
         return;
     }
     _.loopRunning = true;
-    if (isUpdtReq(_.tsPrices) || (s.isWeatherFcstUsed && isUpdtReq(_.tsFcst))) {
+    if (isUpdtReq(_.tsPrices) || (s.heatingMode.isFcstUsed && isUpdtReq(_.tsFcst))) {
         start();
     } else {
         _.loopRunning = false;

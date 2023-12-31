@@ -589,17 +589,17 @@ function nextChkHr() {
 /**
 Getting prices or forecast for today if 
     * prices or forecast have never been fetched OR 
-    * prices or forecast are not from today or tomorrow OR 
+    * prices or forecast are not from today or yesterday OR 
     * prices or forecast needs regular update
  */
 function isUpdtReq(ts) {
     let nextHour = nextChkHr();
     let now = new Date();
     let isToday = new Date(ts * 1000).getDate() === now.getDate();
-    let isTomorrow = new Date(ts * 1000).getDate() === new Date(now + _.dayInSec * 1000).getDate();
+    let isYesterday = new Date(ts * 1000).getDate() === new Date(now - _.dayInSec * 1000).getDate();
     let isTsAfterChkT = new Date(ts * 1000).getHours() === nextHour;
     let isChkT = now.getHours() === nextHour;
-    return (isChkT && !isTsAfterChkT) || !(isToday || isTomorrow);
+    return (isChkT && !isTsAfterChkT) || !(isToday || isYesterday);
 }
 
 /**

@@ -1,5 +1,6 @@
 # Smart and cheap heating with Shelly
 
+## What is this script?
 This Shelly script is designed to retrieve energy market prices from Elering and
 activate heating during the most cost-effective hours each day, employing various algorithms. 
 
@@ -7,32 +8,38 @@ activate heating during the most cost-effective hours each day, employing variou
 2. Division of heating into time periods, with activation during the cheapest hour within each period.
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 
-The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.   
+The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.    
 
-Configuration parameters: 
+## Configuration parameters
 
-* ``heatingMode: HEAT24H_FCST`` - Heating mode, otions are following:
-    * ``HEAT24H_FCST`` - The heating time for 24-hour period depends on the outside temperature.
-    * ``HEAT12H_FCST`` - The heating time for each 12-hour period depends on the outside temperature.
-    * ``HEAT6H_FCST`` - The heating time for each 6-hour period depends on the outside temperature.
-    * ``HEAT24H_12H`` - Heating is activated during the 12 most cost-effective hours in a day.
-    * ``HEAT24H_10H`` - Heating is activated during the 10 most cost-effective hours in a day.
-    * ``HEAT24H_8H`` - Heating is activated during the 8 most cost-effective hours in a day.
-    * ``HEAT12H_6H`` - Heating is activated during the six most cost-effective hours within every 12-hour period.
-    * ``HEAT12H_4H`` - Heating is activated during the four most cost-effective hours within every 12-hour period. 
-    * ``HEAT12H_2H`` - Heating is activated during the two most cost-effective hours within every 12-hour period. 
-    * ``HEAT6H_2H`` - Heating is activated during the two most cost-effective hours within every 6-hour period.
-    * ``HEAT6H_1H`` - Heating is activated during the single most cost-effective hours within every 6-hour period. 
-    * ``HEAT4H_2H`` - Heating is activated during the two most cost-effective hours within every 6-hour period.
-    * ``HEAT4H_1H`` - Heating is activated during the single most cost-effective hours within every 6-hour period.
-    * ``HEATMINMAX`` - Heating is only activated during hours when the price is lower than the specified alwaysOnMaxPrice.
-    
-* ``elektrilevi: VORK2KUU`` - Elektrilevi transmission fee, options are the following:
-    * ``VORK1`` - Elektrilevi Võrk1
-    * ``VORK2`` - Elektrilevi Võrk2
-    * ``VORK2KUU`` - Elektrilevi Võrk2 with monthly fee
-    * ``VORK4`` - Elektrilevi Võrk4
-    * ``NONE`` - transmission fee is set to 0
+* ``heatingMode: HEAT24H_FCST`` - Heating mode, otions are described in the following table.
+
+|Heating mode|Description|
+|---|---|
+|``HEAT24H_FCST``|The heating time for **24-hour** period depends on the **outside temperature**.|
+|``HEAT12H_FCST``|The heating time for each **12-hour** period depends on the **outside temperature**.|
+|``HEAT6H_FCST``|The heating time for each **6-hour** period depends on the **outside temperature**.|
+|``HEAT24H_12H``|Heating is activated during the **12** most cost-effective hours in a **day**.|
+|``HEAT24H_10H``|Heating is activated during the **10** most cost-effective hours in a **day**.|
+|``HEAT24H_8H``|Heating is activated during the **8** most cost-effective hours in a **day**.|
+|``HEAT12H_6H``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|
+|``HEAT12H_4H``|Heating is activated during the **four** most cost-effective hours within every **12-hour** period. |
+|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |
+|``HEAT6H_2H``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|
+|``HEAT6H_1H``|Heating is activated during the **single** most cost-effective hours within every **6-hour** period. |
+|``HEAT4H_2H``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|
+|``HEAT4H_1H``|Heating is activated during the **single** most cost-effective hours within every **4-hour** period.|
+|``HEATMINMAX``|Heating is only activated during hours when the **price is lower** than the specified **alwaysOnMaxPrice**.|
+   
+* ``elektrilevi: VORK2KUU`` - Elektrilevi transmission fee, options are the following.
+
+|Heating mode|Description|
+|---|---|
+|``VORK1``|Elektrilevi Võrk1. Day and night rate is 72 EUR/MWh|
+|``VORK2``|Elektrilevi Võrk2. Day 87 and night 50 EUR/MWh|
+|``VORK2KUU``|Elektrilevi Võrk2 with monthly fee. Day 56 and night 33 EUR/MWh|
+|``VORK4``|Elektrilevi Võrk4. Day 37 and night 21 EUR/MWh|
+|``NONE``|Transmission fee is set to 0.|
 
 * ``alwaysOnMaxPrice: 10`` - Keep heating always ON if energy price lower than this value (EUR/MWh).
 
@@ -52,13 +59,22 @@ Configuration parameters:
     * ``lt`` - Lithuania
     * ``lv`` - Latvia
 
-* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``
+* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
     * ``-10`` - less heating
     * ``10`` - more heating
 
-* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``
+* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``. This setting is applicable only if weather forecast used.
     * ``0`` - flat
     * ``1`` - steep
+
+## Important to know
+
+<p>To mitigate the impact of power or internet outages, this script operates continuously. It checks every minute to confirm whether updates are needed for energy market prices or the current weather forecast.</p>
+<p>The "enable" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
+<p>The Shelly firmware must be version 1.0.0 or higher. The script is not compatible with the firmware 0.14.* or older.</p>
+<p>Up to three instances (limited by Shelly) of this script can run concurrently, each employing different algorithms. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly PRO 4PM.</p>
+<p>This script exclusively handles schedulers generated by its own processes. In contrast to the previous version, which featured a "delete all schedulers" command, this script is designed to delete only those schedulers that it has created.</p>
+
 ___
 ___
 #  ↓↓↓ waiting for update ↓↓↓ 

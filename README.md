@@ -14,21 +14,21 @@ The script runs daily after 23:00 or as necessary during the day to set up heati
 
 * ``heatingMode: HEAT24H_FCST`` - Heating mode, otions are described in the following table.
 
-|Heating mode|Description|
-|---|---|
-|``HEAT24H_FCST``|The heating time for **24-hour** period depends on the **outside temperature**.|
-|``HEAT12H_FCST``|The heating time for each **12-hour** period depends on the **outside temperature**.|
-|``HEAT6H_FCST``|The heating time for each **6-hour** period depends on the **outside temperature**.|
-|``HEAT24H_12H``|Heating is activated during the **12** most cost-effective hours in a **day**.|
-|``HEAT24H_10H``|Heating is activated during the **10** most cost-effective hours in a **day**.|
-|``HEAT24H_8H``|Heating is activated during the **8** most cost-effective hours in a **day**.|
-|``HEAT12H_6H``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|
-|``HEAT12H_4H``|Heating is activated during the **four** most cost-effective hours within every **12-hour** period. |
-|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |
-|``HEAT6H_2H``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|
-|``HEAT6H_1H``|Heating is activated during the **single** most cost-effective hours within every **6-hour** period. |
-|``HEAT4H_2H``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|
-|``HEAT4H_1H``|Heating is activated during the **single** most cost-effective hours within every **4-hour** period.|
+> You can customize or change the heating modes to better suit your personal preferences and specific situations. This flexibility allows you to adjust the system based on your needs, energy considerations, and comfort requirements.
+
+|Heating mode|Description|Best usage|
+|---|---|---|
+|``HEAT24H_FCST``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
+|``HEAT12H_FCST``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
+|``HEAT6H_FCST``|The heating time for each **6-hour** period depends on the **outside temperature**.|Underfloor heating panels with small water tank capable of retaining thermal energy for a duration of 3 to 6 hours.
+|``HEAT24H_12H``|Heating is activated during the **12** most cost-effective hours in a **day**.|Big water tank 1000L or more.
+|``HEAT24H_8H``|Heating is activated during the **8** most cost-effective hours in a **day**.|Big water tank 1000L or more.
+|``HEAT12H_6H``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
+|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 50L hot water boiler for a single person.
+|``HEAT6H_2H``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
+|``HEAT6H_1H``|Heating is activated during the **single** most cost-effective hours within every **6-hour** period. |A 100L hot water boiler for a small household with two people.
+|``HEAT4H_2H``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
+|``HEAT4H_1H``|Heating is activated during the **single** most cost-effective hours within every **4-hour** period.|A 100L hot water boiler for a household with four or more people.
 |``HEATMINMAX``|Heating is only activated during hours when the **price is lower** than the specified **alwaysOnMaxPrice**.|
    
 * ``elektrilevi: VORK2KUU`` - Elektrilevi transmission fee, options are the following.
@@ -78,6 +78,8 @@ The script runs daily after 23:00 or as necessary during the day to set up heati
 ___
 ___
 #  ↓↓↓ waiting for update ↓↓↓ 
+
+
 
 Smart heating can be based on different algorithms. There are two of them used by myself:
 1. Full day heating, weather forecast and electricity market price. [1. Full Day Heating](#1-full-day-heating)

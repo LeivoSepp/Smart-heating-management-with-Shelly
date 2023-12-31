@@ -595,8 +595,10 @@ Getting prices or forecast for today if
 function isUpdtReq(ts) {
     let nextHour = nextChkHr();
     let now = new Date();
-    let isToday = new Date(ts * 1000).getDate() === now.getDate();
-    let isYesterday = new Date(ts * 1000).getDate() === new Date(now - _.dayInSec * 1000).getDate();
+    let yestDt = new Date(now - _.dayInSec * 1000);
+    let tsDt = new Date(ts * 1000);
+    let isToday = tsDt.getFullYear() === now.getFullYear() && tsDt.getMonth() === now.getMonth() && tsDt.getDate() === now.getDate();
+    let isYesterday = tsDt.getFullYear() === yestDt.getFullYear() && tsDt.getMonth() === yestDt.getMonth() && tsDt.getDate() === yestDt.getDate();
     let isTsAfterChkT = new Date(ts * 1000).getHours() === nextHour;
     let isChkT = now.getHours() === nextHour;
     return (isChkT && !isTsAfterChkT) || !(isToday || isYesterday);

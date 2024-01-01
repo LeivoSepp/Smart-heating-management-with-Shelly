@@ -1,0 +1,7 @@
+[
+    {
+    "fname": "SmartHeatingWidthShelly.js",
+    "title": "Budget-friendly smart heating with energy market price.",
+    "description": "This Shelly script is designed to retrieve energy market prices from Elering and activate heating during the most cost-effective hours each day, employing various algorithms."
+    }
+]

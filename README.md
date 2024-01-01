@@ -191,10 +191,10 @@ flowchart TD
     A[Get Shelly time and location] --> B{Get weather forecast <br> from Open-Meteo.com API}
     B -- Succeeded --> C[Calculate heating time]
     C --> D{Get electricity market price <br> from Elering API}
-    B -- Failed --> E[Use default heating time]
+    B -- Failed --> B[Check again in 1 minute]
     E --> D
     D -- Succeeded --> F[Create hourly schedules]
-    D -- Failed --> G[Create one big heating time]
+    D -- Failed --> D[Check again in 1 minute]
     F --> H[Finish]
     G --> H
 ```

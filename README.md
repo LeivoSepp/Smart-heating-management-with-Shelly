@@ -1,6 +1,15 @@
 # Smart and cheap heating with Shelly
 
-## What is this script?
+### Contents
+* [`Script Overview`](#script-overview)
+* [`Configuration Parameters`](#configuration-parameters)
+* [`Important to Know`](#important-to-know)
+* [`Weather Forecast Algorithm`](#weather-forecast-algorithm)
+* [`Time Period Algorithm`](#time-period-algorithm)
+* [`How to Install this Script`](#how-to-install-this-script)
+* [`Does it Truly Reduce My Electric Bills`](#does-it-truly-reduce-my-electric-bills)
+
+## Script Overview
 This Shelly script is designed to retrieve energy market prices from Elering and
 activate heating during the most cost-effective hours each day, employing various algorithms. 
 
@@ -148,7 +157,17 @@ ___
 
 </br>
 
-# How to install this script?
+## Does it Truly Reduce My Electric Bills
+In short: yes.
+
+Here's a more detailed explanation. While your overall daily electric consumption remains the same, this script optimizes the activation of your heating devices for the most economical hours. Consequently, even with the same energy consumption, your electricity bill is reduced.
+
+Appliances like water heaters, water tanks, ground-source or air-source heat pumps, electric radiators, underfloor electric heaters, and air conditioning are examples of energy-intensive devices that benefit from being activated during the most cost-effective times of the day.
+
+Electricity prices can fluctuate significantly, sometimes varying up to 100 times during a day. Check electricity market prices for more information. https://dashboard.elering.ee/et/nps/price
+
+
+# How to Install this Script
 
 1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.cloud/en-ee/products/).
 2. Connect the Shelly device to your personal WiFi network. Refer to the [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
@@ -169,21 +188,14 @@ ___
 2. Inspect the scheduled times when the Shelly will be activated.
 3. Schedulers are organized based on the market price.
 
+## How the Script Operates
 
-# Does it Truly Reduce My Electric Bills?
-In short: yes.
-
-Here's a more detailed explanation. While your overall daily electric consumption remains the same, this script optimizes the activation of your heating devices for the most economical hours. Consequently, even with the same energy consumption, your electricity bill is reduced.
-
-Appliances like water heaters, water tanks, ground-source or air-source heat pumps, electric radiators, underfloor electric heaters, and air conditioning are examples of energy-intensive devices that benefit from being activated during the most cost-effective times of the day.
-
-Electricity prices can fluctuate significantly, sometimes varying up to 100 times during a day. Check electricity market prices for more information. https://dashboard.elering.ee/et/nps/price
-
-## How this script works?
-
-1. This script requires internet connection to download daily basis electricity market prices and weather forecast.
-2. After first run, the script creates a schedule for itself and runs daily basis between 23:00-23:15.
-3. The script follows this flowchart.
+1. Internet Connection: 
+    * The script needs the internet to download daily electricity prices and weather forecasts.
+2. Daily Operation:
+    * It runs every day after 23:00 or as needed during the day to set up heating times.
+3. Workflow:
+    * The script follows a flowchart to determine the best heating hours based on market prices and weather forecasts.
 
 ```mermaid
 flowchart TD

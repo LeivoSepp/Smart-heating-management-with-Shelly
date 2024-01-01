@@ -187,14 +187,16 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 ```mermaid
 flowchart TD
-    0[Start] --> A
-    A[Get Shelly time and location] --> B{Get weather forecast <br> from Open-Meteo.com API}
+    0[Start loop] --> A
+    A[Get Shelly time and location] --> K{Is weather forecast used?}
+    K -- Yes --> B{Get weather forecast <br> from Open-Meteo.com API}
     B -- Succeeded --> C[Calculate heating time]
+    K -- No --> D
     C --> D{Get electricity market price <br> from Elering API}
-    B -- Failed --> B[Check again in 1 minute]
-    E --> D
-    D -- Succeeded --> F[Create hourly schedules]
-    D -- Failed --> D[Check again in 1 minute]
-    F --> H[Finish]
-    G --> H
+    B -- Failed, check again in 1 minute --> B
+    D -- Succeeded --> F[Calculate and create hourly schedules]
+    D -- Failed, check again in 1 minute --> D
+    F --> L{Check, if market price and </br> forecast data is accurate}
+    L -- Yes, check again in 1 minute --> L
+    L -- No, start the script --> 0
 ```

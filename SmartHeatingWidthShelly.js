@@ -384,7 +384,7 @@ function priceCalc(res, err, msg) {
         let sortedPeriod = [];
 
         //the number of period when the script is executed in case of forecast used
-        let nmPeriod = Math.ceil((new Date().getHours() + 2) / s.heatingMode.timePeriod);
+        let nmPeriod = Math.ceil((new Date().getHours() % 23 + 2) / s.heatingMode.timePeriod);
 
         // Create an array for each heating period, sort, and push the prices 
         for (let i = 0; i < _.ctPeriods; i++) {

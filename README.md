@@ -1,13 +1,14 @@
 # Smart and cheap heating with Shelly
 
 ### Contents
-* [`Script Overview`](#script-overview)
-* [`Configuration Parameters`](#configuration-parameters)
-* [`Important to Know`](#important-to-know)
-* [`Weather Forecast Algorithm`](#weather-forecast-algorithm)
-* [`Time Period Algorithm`](#time-period-algorithm)
-* [`How to Install this Script`](#how-to-install-this-script)
-* [`Does it Truly Reduce My Electric Bills`](#does-it-truly-reduce-my-electric-bills)
+
+* [Script Overview](#script-overview)
+* [Configuration Parameters](#configuration-parameters)
+* [Important to Know](#important-to-know)
+* [Weather Forecast Algorithm](#weather-forecast-algorithm)
+* [Time Period Algorithm](#time-period-algorithm)
+* [How to Install this Script](#how-to-install-this-script)
+* [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
 
 ## Script Overview
 This Shelly script is designed to retrieve energy market prices from Elering and

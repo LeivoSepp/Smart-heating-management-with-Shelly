@@ -117,9 +117,11 @@ let _ = {
 
 /*
 This is the start of the script.
+Set the script to start automatically.
 Get old scheduler IDs from the KVS storage
 */
 function start() {
+    Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } }); //auto-start
     Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
         if (res) {
             _.schedIDs = JSON.parse(res.value);

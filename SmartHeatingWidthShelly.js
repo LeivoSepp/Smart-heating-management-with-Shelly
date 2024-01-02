@@ -118,16 +118,27 @@ let _ = {
 /*
 This is the start of the script.
 Set the script to start automatically.
+Set the default script library
 Get old scheduler IDs from the KVS storage
 */
 function start() {
-    Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } }); //auto-start
+    setAutoStart();
+    setKvsScrLibr();
+
     Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
         if (res) {
             _.schedIDs = JSON.parse(res.value);
         }
         delOldSched();
     });
+}
+/* set the script to sart automatically on boot */
+function setAutoStart() {
+    Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } });
+}
+/* set the default script library */
+function setKvsScrLibr() {
+    Shelly.call("KVS.set", { key: "scripts-library", value: "{\x22url\x22: \x22https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json\x22}" });
 }
 
 /*

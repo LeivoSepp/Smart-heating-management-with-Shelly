@@ -2,13 +2,26 @@
 
 ### Contents
 
-* [Script Overview](#script-overview)
-* [Configuration Parameters](#configuration-parameters)
-* [Important to Know](#important-to-know)
-* [Weather Forecast Algorithm](#weather-forecast-algorithm)
-* [Time Period Algorithm](#time-period-algorithm)
-* [How to Install this Script](#how-to-install-this-script)
-* [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
+- [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
+    - [Contents](#contents)
+  - [Script Overview](#script-overview)
+  - [Configuration parameters](#configuration-parameters)
+  - [Important to know](#important-to-know)
+- [Smart heating algorithms](#smart-heating-algorithms)
+  - [Weather Forecast Algorithm](#weather-forecast-algorithm)
+    - [Advantages of Weather Forecast-Based Heating](#advantages-of-weather-forecast-based-heating)
+    - [Shelly Geolocation](#shelly-geolocation)
+    - [Heating curve](#heating-curve)
+  - [Time Period Algorithm](#time-period-algorithm)
+  - [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
+- [How to Install this Script](#how-to-install-this-script)
+  - [How to Verify Script Execution](#how-to-verify-script-execution)
+  - [How the Script Operates](#how-the-script-operates)
+- [Troubleshooting](#troubleshooting)
+  - [Message "This schedule contains invalid call method or params"](#message-this-schedule-contains-invalid-call-method-or-params)
+  - [Message "Id3: #1 Scheduler at: 12:00 price: 185.91 EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit."](#message-id3-1-scheduler-at-1200-price-18591-eurmwh-energy-price--transmission-failed-20-schedulers-is-the-shelly-limit)
+  - [Error "Couldn't get script"](#error-couldnt-get-script)
+  - [Advanced → Key Value Storage → Script Data](#advanced--key-value-storage--script-data)
 
 ## Script Overview
 This Shelly script is designed to retrieve energy market prices from Elering and
@@ -213,3 +226,63 @@ flowchart TD
     L -- Yes, check again in 1 minute --> L
     L -- No, start the script --> 0
 ```
+
+# Troubleshooting
+
+## Message "This schedule contains invalid call method or params"
+
+Currently, in Shelly device web page, all schedules are labeled with the message "This schedule contains an invalid call method or params," and attempting to click on any schedule fails to open them.
+
+This as a Shelly bug. It's important to note two key points regarding this issue:
+
+1. All schedules are accessible and viewable without any problems through the Shelly cloud or mobile app. Therefore, there is no cause for concern about the integrity of the schedules or their functionality.
+2. A temporary solution has been identified for accessing schedules through the device web page. By clicking on the schedule and then refreshing the page, users can successfully open the schedule.
+
+<img src="images/InvalidSchedule.jpg" alt="Invalid Schedules" width="750">
+
+## Message "Id3: #1 Scheduler at: 12:00 price: 185.91 EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit."
+
+The attempt to add a scheduler has failed due to the Shelly-imposed limit of 20 schedulers. This limit is applicable to the entire device, irrespective of the Shelly model, including multichannel devices such as the Pro4PM. 
+
+> To address this limitation, we recommend utilizing the heating mode HEAT12H_FCST. This mode calculates schedules every twelve hours, enabling you to create up to 12 schedules within each twelve-hour cycle. This alternative mode ensures flexibility in scheduling while adhering to the device's limitations.
+
+<img src="images/ScheduleLimit.jpg" alt="Invalid Schedules" width="750">
+
+## Error "Couldn't get script"
+
+There is an issue within the Shelly system that may affect your experience when attempting to open scripts through the Shelly cloud or mobile app. The encountered error, "Couldn't get script," is a known bug preventing the opening of scripts larger than 15kB via these platforms.
+
+To navigate around this inconvenience, we suggest the following workarounds:
+
+1. Open the Script Through Device Web Page:
+Access the device web page to successfully open any script. This method provides a direct and reliable solution to view and manage your scripts seamlessly.
+
+2. Alternative Solution Through Shelly Cloud:
+If accessing the device web page is not feasible, follow these steps on the Shelly cloud:
+
+   1. Delete the existing script.
+   2. Create a new script.
+   3. Copy and paste the entire script into the scripting window.
+   4. Configure all necessary settings.
+   5. Save and close the script.
+   6. Run the script.
+
+    If any issues arise during this process, you can repeat the workaround by starting from the script deletion step.
+
+<img src="images/CouldntGetScript.jpg" alt="Couldn't get script." width="750">
+
+## Advanced &rarr; Key Value Storage &rarr; Script Data
+
+The script saves data in Shelly KVS (Key-Value-Storage) to preserve it in case of power outages or restarts.
+
+To access the stored data on the Shelly device web page, navigate to **Advanced &rarr; KVS**.
+
+1. Key: ``schedulerIDs1`` Value: ``[12,13,14,15,16,17,18,19,23,24]``
+   
+    The numeric values represent schedule ID numbers created by the script. This information is crucial for each script to identify and manage schedules associated with it. It aids in the proper deletion of outdated schedules when creating new ones is necessary.
+
+2. Key: ``timestamp1`` Value: ``Wed Jan 3 2024 21:13:24 GMT+0200`` 
+   
+   This timestamp indicates the time when the script successfully retrieved market prices from Elering. While this information is primarily for your reference, it offers insights into the timeline of script activities.
+
+<img src="images/KVS.jpg" alt="Key Value Storage" width="750">

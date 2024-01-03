@@ -1,9 +1,6 @@
 # Smart and cheap heating with Shelly
 
-### Table of Contents
-
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
-    - [Table of Contents](#table-of-contents)
   - [Script Overview](#script-overview)
   - [Configuration parameters](#configuration-parameters)
   - [Important to know](#important-to-know)

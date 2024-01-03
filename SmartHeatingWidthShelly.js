@@ -128,6 +128,7 @@ function start() {
     Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
         if (res) {
             _.schedIDs = JSON.parse(res.value);
+            res = null; //to save memory
         }
         delOldSched();
     });
@@ -248,9 +249,7 @@ function getForecast() {
     }
 }
 
-/**
-Calculate heating hours
-*/
+/* Calculate heating hours */
 function fcstCalc(res, err, msg) {
     try {
         if (err != 0 || res === null || res.code != 200 || JSON.parse(res.body)["error"]) {
@@ -259,16 +258,18 @@ function fcstCalc(res, err, msg) {
         }
         else {
             let jsonFcst = JSON.parse(res.body); //open-meteo json response
-            let aTemp = jsonFcst["hourly"]["apparent_temperature"]; //get 12h or 24h temperatures
+            let aTemp = jsonFcst["hourly"]["apparent_temperature"]; //get 6h, 12h or 24h temperatures
             let sumFcst = 0;
             for (let i = 0; i < aTemp.length; i++) {
                 sumFcst += aTemp[i];
             }
-            aTemp = null; //clear memory
-            let tempFcst = Math.ceil(sumFcst / s.heatingMode.timePeriod); //AVG and round temperature up
+            //clear memory
+            aTemp = null;
+            res = null;
+            jsonFcst = null;
 
-            //store the timestamp into memory
-            _.tsFcst = epoch();
+            let tempFcst = Math.ceil(sumFcst / s.heatingMode.timePeriod); //AVG and round temperature up
+            _.tsFcst = epoch();  //store the timestamp into memory
             print(_.pId, "We got weather forecast from Open Meteo at ", new Date().toString());
 
             // calculating heating hours
@@ -280,9 +281,6 @@ function fcstCalc(res, err, msg) {
 
             print(_.pId, "Temperture forecast width windchill is ", tempFcst, " °C, and heating enabled for ", _.heatTime, " hours.");
 
-            //clear memory
-            res = null;
-            jsonFcst = null;
             getElering(); //call elering
         }
     } catch (error) {
@@ -292,10 +290,7 @@ function fcstCalc(res, err, msg) {
     }
 }
 
-/**
-Get electricity market price CSV file from Elering. 
-Script will continue regardless of the error.
- */
+/* Get electricity market price CSV file from Elering.  */
 function getElering() {
     print(_.pId, "Get Elering prices from: ", _.elUrl);
     try {
@@ -441,12 +436,13 @@ function listScheds() {
             else {
                 print(_.pId, "Found ", res.jobs.length, " schedulers.");
                 createScheds(res.jobs);
+                res = null; //to save memory
             }
         });
 }
 
 /**
-Create all schedulers, the limit is 20.
+Create all schedulers, the Shelly limit is 20.
  */
 function createScheds(listScheds) {
     //logic below is a non-blocking method for RPC calls to create all schedulers one by one
@@ -483,7 +479,7 @@ function createScheds(listScheds) {
                 },
                     function (res, err, msg, data) {
                         if (err !== 0) {
-                            print(_.pId, "#" + data.ctPeriod, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the limit.");
+                            print(_.pId, "#" + data.ctPeriod, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit.");
                         }
                         else {
                             print(_.pId, "#" + data.ctPeriod, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");

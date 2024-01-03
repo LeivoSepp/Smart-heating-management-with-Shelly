@@ -285,4 +285,4 @@ To access the stored data on the Shelly device web page, navigate to **Advanced 
    
    This timestamp indicates the time when the script successfully retrieved market prices from Elering. While this information is primarily for your reference, it offers insights into the timeline of script activities.
 
-<img src="images/KVS.jpg" alt="Key Value Storage" width="750">
+<img src="images/kvs.jpg" alt="Key Value Storage" width="750">

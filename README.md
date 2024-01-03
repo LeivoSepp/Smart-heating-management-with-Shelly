@@ -1,9 +1,9 @@
 # Smart and cheap heating with Shelly
 
-### Contents
+### Table of Contents
 
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
-    - [Contents](#contents)
+    - [Table of Contents](#table-of-contents)
   - [Script Overview](#script-overview)
   - [Configuration parameters](#configuration-parameters)
   - [Important to know](#important-to-know)
@@ -13,8 +13,9 @@
     - [Shelly Geolocation](#shelly-geolocation)
     - [Heating curve](#heating-curve)
   - [Time Period Algorithm](#time-period-algorithm)
-  - [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
+- [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
 - [How to Install this Script](#how-to-install-this-script)
+  - [Installation](#installation)
   - [How to Verify Script Execution](#how-to-verify-script-execution)
   - [How the Script Operates](#how-the-script-operates)
 - [Troubleshooting](#troubleshooting)
@@ -171,7 +172,7 @@ ___
 
 </br>
 
-## Does it Truly Reduce My Electric Bills
+# Does it Truly Reduce My Electric Bills
 In short: yes.
 
 Here's a more detailed explanation. While your overall daily electric consumption remains the same, this script optimizes the activation of your heating devices for the most economical hours. Consequently, even with the same energy consumption, your electricity bill is reduced.
@@ -182,6 +183,8 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 
 # How to Install this Script
+
+## Installation
 
 1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.cloud/en-ee/products/).
 2. Connect the Shelly device to your personal WiFi network. Refer to the [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)

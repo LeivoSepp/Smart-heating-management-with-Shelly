@@ -41,16 +41,16 @@ let HEAT6H_1H = { timePeriod: 6, heatingTime: 1, isFcstUsed: false };
 /* 4h heating schedulers */
 let HEAT4H_2H = { timePeriod: 4, heatingTime: 2, isFcstUsed: false };
 let HEAT4H_1H = { timePeriod: 4, heatingTime: 1, isFcstUsed: false };
-/* Use only min-max price */
-let HEATMINMAX = { timePeriod: 0, heatingTime: 0, isFcstUsed: false };
+/* Use only low price component */
+let HEAT_LOWPRICE = { timePeriod: 0, heatingTime: 0, isFcstUsed: false };
 
 
 /****** USER SETTINGS, START MODIFICATION ******/
 let s = {
     heatingMode: HEAT24H_FCST,  // HEATING MODE. Different heating modes described above.
     elektrilevi: VORK2KUU,      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK2KUU / VORK4 / NONE
-    alwaysOnMaxPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
-    alwaysOffMinPrice: 300,     // Keep heating always OFF if energy price higher than this value (EUR/MWh)
+    alwaysOnLowPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
+    alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
     isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
     defaultTimer: 60,           // Default timer duration, in minutes, for toggling the Shelly state.
@@ -109,10 +109,10 @@ let _ = {
     dayInSec: 60 * 60 * 24,
     sId: Shelly.getCurrentScriptId(),
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
-    maxRpcCalls: 3,
-    callsCntr: 0,
+    mc: 3,
+    ct: 0,
     newScheds: [],
-    schedIDs: [],
+    si: [],
 };
 
 /*
@@ -127,15 +127,22 @@ function start() {
 
     Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
         if (res) {
-            _.schedIDs = JSON.parse(res.value);
+            _.si = JSON.parse(res.value);
             res = null; //to save memory
         }
-        delOldSched();
+        delSc();
     });
 }
 /* set the script to sart automatically on boot */
 function setAutoStart() {
-    Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } });
+    if (!Shelly.getComponentConfig("script", _.sId).enable) {
+        Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } },
+            function (res, err, msg, data) {
+                if (err != 0) {
+                    print("Heating script autostart is not enabled.", msg, ". After Shelly restart, this script will not start and new heating schedules are not created.");
+                }
+            });
+    }
 }
 /* set the default script library */
 function setKvsScrLibr() {
@@ -145,12 +152,12 @@ function setKvsScrLibr() {
 /*
 Before anything else delete all the old schedulers created by this script. 
 */
-function delOldSched() {
+function delSc() {
     //logic below is a non-blocking method for RPC calls to delete all schedulers one by one
-    if (_.callsCntr < 6 - _.maxRpcCalls) {
-        for (let i = 0; i < _.maxRpcCalls && i < _.schedIDs.length; i++) {
-            let id = _.schedIDs.splice(0, 1)[0];
-            _.callsCntr++;
+    if (_.ct < 6 - _.mc) {
+        for (let i = 0; i < _.mc && i < _.si.length; i++) {
+            let id = _.si.splice(0, 1)[0];
+            _.ct++;
             Shelly.call("Schedule.Delete", { id: id },
                 function (res, err, msg, data) {
                     if (err !== 0) {
@@ -159,19 +166,19 @@ function delOldSched() {
                     else {
                         print(_.pId, "Schedule ", data.id, " delete SUCCEEDED.");
                     }
-                    _.callsCntr--;
+                    _.ct--;
                 },
                 { id: id }
             );
         }
     }
     //if there are more calls in the queue
-    if (_.schedIDs.length > 0) {
+    if (_.si.length > 0) {
         Timer.set(
             1000, //the delay
             false,
             function () {
-                delOldSched();
+                delSc();
             });
     }
     else {
@@ -185,7 +192,7 @@ This one is called after all the old schedulers are deleted.
 */
 function main() {
     //wait until all the schedulers are deleted
-    if (_.callsCntr !== 0) {
+    if (_.ct !== 0) {
         Timer.set(
             1000,
             false,
@@ -374,7 +381,7 @@ function priceCalc(res, err, msg) {
         //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
         if (s.heatingMode.timePeriod <= 0) {
             for (let a = 0; a < eleringPrices.length; a++) {
-                if ((eleringPrices[a][1] < s.alwaysOnMaxPrice) && !(eleringPrices[a][1] > s.alwaysOffMinPrice)) {
+                if (eleringPrices[a][1] < s.alwaysOnLowPrice) {
                     _.newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1], 0]);
                     print(_.pId, "Energy price + transfer fee " + eleringPrices[a][1] + " EUR/MWh at " + new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
                 }
@@ -405,12 +412,12 @@ function priceCalc(res, err, msg) {
             let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that period 
 
             for (let a = 0; a < sortedPeriod.length; a++) {
-                if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnMaxPrice) && !(sortedPeriod[a][1] > s.alwaysOffMinPrice)) {
+                if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] > s.alwaysOffHighPrice)) {
                     _.newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
                 }
 
                 //If some hours are too expensive to use for heating, then just let user know for this
-                if (a < heatingHours && sortedPeriod[a][1] > s.alwaysOffMinPrice) {
+                if (a < heatingHours && sortedPeriod[a][1] > s.alwaysOffHighPrice) {
                     print(_.pId, "Energy price + transfer fee " + sortedPeriod[a][1] + " EUR/MWh at " + new Date((sortedPeriod[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
                 }
             }
@@ -430,11 +437,11 @@ function listScheds() {
     Shelly.call("Schedule.List", {},
         function (res, err, msg, data) {
             if (res === 0) {
-                print(_.pId, "No existing schedulers found.");
+                // print(_.pId, "No existing schedulers found.");
                 createScheds([]);
             }
             else {
-                print(_.pId, "Found ", res.jobs.length, " schedulers.");
+                // print(_.pId, "Found ", res.jobs.length, " schedulers.");
                 createScheds(res.jobs);
                 res = null; //to save memory
             }
@@ -446,8 +453,8 @@ Create all schedulers, the Shelly limit is 20.
  */
 function createScheds(listScheds) {
     //logic below is a non-blocking method for RPC calls to create all schedulers one by one
-    if (_.callsCntr < 6 - _.maxRpcCalls) {
-        for (let i = 0; i < _.maxRpcCalls && i < _.newScheds.length; i++) {
+    if (_.ct < 6 - _.mc) {
+        for (let i = 0; i < _.mc && i < _.newScheds.length; i++) {
             let isExist = false;
             let hour = _.newScheds[0][0];
             let ctPeriod = _.newScheds[0][2];
@@ -466,7 +473,7 @@ function createScheds(listScheds) {
             }
             // only create unique schedulers
             if (!isExist) {
-                _.callsCntr++;
+                _.ct++;
                 Shelly.call("Schedule.Create", {
                     "id": 0, "enable": true, "timespec": timespec,
                     "calls": [{
@@ -483,9 +490,9 @@ function createScheds(listScheds) {
                         }
                         else {
                             print(_.pId, "#" + data.ctPeriod, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
-                            _.schedIDs.push(res.id); //create an array of scheduleIDs
+                            _.si.push(res.id); //create an array of scheduleIDs
                         }
-                        _.callsCntr--;
+                        _.ct--;
                     },
                     { hour: hour, price: price, ctPeriod: ctPeriod }
                 );
@@ -512,7 +519,7 @@ Storing the scheduler IDs in KVS to not loose them in case of power outage
  */
 function setKVS() {
     //wait until all the schedulerIDs are collected
-    if (_.callsCntr !== 0) {
+    if (_.ct !== 0) {
         Timer.set(
             1000,
             false,
@@ -523,7 +530,7 @@ function setKVS() {
     }
     //schedulers are created, store the IDs to KVS
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
-    Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedIDs) },
+    Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.si) },
         function () {
             print(_.pId, "All good now, next heating calculation at", nextChkHr() + ":00.");
             _.loopRunning = false;
@@ -629,4 +636,73 @@ function loop() {
 }
 
 Timer.set(_.loopFreq * 1000, true, loop);
+
+/*  ---------  WATCHDOG START  ---------   */
+/** This is the watchdog script code */
+let watchdog = 'let _={sId:0,si:[],mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){e&&(_.si=JSON.parse(e.value),e=null,delSc(_.si,c.sId))}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
+/** find watchdog script ID */
+function createWatchdog() {
+    Shelly.call('Script.List', null, function (res, err, msg, data) {
+        if (res) {
+            let wdId = 0;
+            let s = res.scripts;
+            res = null;
+            for (let i = 0; i < s.length; i++) {
+                if (s[i].name === "watchdog") {
+                    wdId = s[i].id;
+                    break;
+                }
+            }
+            createScript(wdId);
+        }
+    });
+}
+/** Create a new script (id==0) or stop the existing script (id<>0) if watchdog found. */
+function createScript(id) {
+    if (id === 0) {
+        Shelly.call('Script.Create', { name: "watchdog" }, putCode, { id: id });
+    }
+    else {
+        Shelly.call('Script.Stop', { id: id }, putCode, { id: id });
+    }
+}
+/** Add code to the watchdog script */
+function putCode(res, err, msg, data) {
+    if (err === 0) {
+        print(_.pId, "Watchdog script has been created.");
+        let scId = res.id > 0 ? res.id : data.id;
+        Shelly.call('Script.PutCode', { id: scId, code: watchdog }, startScript, { id: scId });
+    }
+    else {
+        print(_.pId, "Watchdog script creation failed.", msg, ". Schedules are not deleted if heating script is stopped or deleted.");
+    }
+}
+/** Enable autostart and start the watchdog script */
+function startScript(res, err, msg, data) {
+    if (err === 0) {
+        print(_.pId, "Insert code to watchdog script completed.");
+        if (!Shelly.getComponentConfig("script", data.id).enable) {
+            Shelly.call('Script.SetConfig', { id: data.id, config: { enable: true } },
+                function (res, err, msg, data) {
+                    if (err != 0) {
+                        print(_.pId, "Watchdog script autostart is not enabled.", msg, ". After Shelly restart, this script will not start and schedules are not deleted if heating script is stopped or deleted.");
+                    }
+                });
+        }
+        Shelly.call('Script.Start', { id: data.id }, function (res, err, msg, data) {
+            if (err === 0) {
+                print(_.pId, "Watchdog script started succesfully.");
+            }
+            else {
+                print(_.pId, "Watchdog script is not started.", msg, ". Schedules are not deleted if heating script is stopped or deleted.");
+            }
+        });
+    }
+    else {
+        print(_.pId, "Adding code to the script is failed.", msg, ". Schedules are not deleted if heating script is stopped or deleted.")
+    }
+}
+/*  ---------  WATCHDOG END  ---------   */
+
+createWatchdog();
 loop();

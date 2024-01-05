@@ -1,4 +1,4 @@
-//This is a reference for watchdog code
+//This is a watchdog reference code
 let _ = {
     sId: 0,
     si: [],

@@ -43,10 +43,12 @@ The script runs daily after 23:00 or as necessary during the day to set up heati
 |``HEAT24H_FCST``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
 |``HEAT12H_FCST``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
 |``HEAT6H_FCST``|The heating time for each **6-hour** period depends on the **outside temperature**.|Air source heat pumps, radiators or underfloor heating panels with small water tank capable of retaining energy for a duration of 3 to 6 hours.
+|``HEAT24H_20H``|Heating is activated during the **20** most cost-effective hours in a **day**.|Ventilation system.
 |``HEAT24H_12H``|Heating is activated during the **12** most cost-effective hours in a **day**.|Big water tank 1000L or more.
 |``HEAT24H_8H``|Heating is activated during the **8** most cost-effective hours in a **day**.|Big water tank 1000L or more.
 |``HEAT12H_6H``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
-|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 50L hot water boiler for a single person.
+|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 150L hot water boiler for a little household.
+|``HEAT12H_1H``|Heating is activated during the **single** most cost-effective hours within every **12-hour** period. |A 100L hot water boiler for a single person.
 |``HEAT6H_2H``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
 |``HEAT6H_1H``|Heating is activated during the **single** most cost-effective hours within every **6-hour** period. |A 100L hot water boiler for a small household with two people.
 |``HEAT4H_2H``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
@@ -211,7 +213,7 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 1. In Shelly app or web page, navigate to "Schedules".
 2. Inspect the scheduled times when the Shelly will be activated.
-3. Schedulers are organized based on the market price.
+3. Schedulers are organized based on the time.
 4. Advanced users can inspect KVS storage: [Advanced → Key Value Storage → Script Data](#advanced--key-value-storage--script-data)
 
 ## How the Script Operates

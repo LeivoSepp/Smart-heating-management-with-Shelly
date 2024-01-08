@@ -28,6 +28,7 @@ let HEAT24H_FCST = { timePeriod: 24, heatingTime: 0, isFcstUsed: true };
 let HEAT12H_FCST = { timePeriod: 12, heatingTime: 0, isFcstUsed: true };
 let HEAT6H_FCST = { timePeriod: 6, heatingTime: 0, isFcstUsed: true };
 /* 24h heating schedulers */
+let HEAT24H_20H = { timePeriod: 24, heatingTime: 20, isFcstUsed: false };
 let HEAT24H_12H = { timePeriod: 24, heatingTime: 12, isFcstUsed: false };
 let HEAT24H_10H = { timePeriod: 24, heatingTime: 10, isFcstUsed: false };
 let HEAT24H_8H = { timePeriod: 24, heatingTime: 8, isFcstUsed: false };
@@ -35,6 +36,7 @@ let HEAT24H_8H = { timePeriod: 24, heatingTime: 8, isFcstUsed: false };
 let HEAT12H_6H = { timePeriod: 12, heatingTime: 6, isFcstUsed: false };
 let HEAT12H_4H = { timePeriod: 12, heatingTime: 4, isFcstUsed: false };
 let HEAT12H_2H = { timePeriod: 12, heatingTime: 2, isFcstUsed: false };
+let HEAT12H_1H = { timePeriod: 12, heatingTime: 1, isFcstUsed: false };
 /* 6h heating schedulers */
 let HEAT6H_2H = { timePeriod: 6, heatingTime: 2, isFcstUsed: false };
 let HEAT6H_1H = { timePeriod: 6, heatingTime: 1, isFcstUsed: false };
@@ -111,9 +113,8 @@ let _ = {
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
     mc: 3,
     ct: 0,
-    newScheds: [],
     si: [],
-    version: 2.4,
+    version: 2.5,
 };
 
 /*
@@ -127,11 +128,12 @@ function start() {
     setKvsScrLibr();
 
     Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
+        let si = [];
         if (res) {
-            _.si = JSON.parse(res.value);
+            si = JSON.parse(res.value);
             res = null; //to save memory
         }
-        delSc();
+        delSc(si);
     });
 }
 /* set the script to sart automatically on boot */
@@ -153,11 +155,11 @@ function setKvsScrLibr() {
 /*
 Before anything else delete all the old schedulers created by this script. 
 */
-function delSc() {
+function delSc(s) {
     //logic below is a non-blocking method for RPC calls to delete all schedulers one by one
     if (_.ct < 6 - _.mc) {
-        for (let i = 0; i < _.mc && i < _.si.length; i++) {
-            let id = _.si.splice(0, 1)[0];
+        for (let i = 0; i < _.mc && i < s.length; i++) {
+            let id = s.splice(0, 1)[0];
             _.ct++;
             Shelly.call("Schedule.Delete", { id: id },
                 function (res, err, msg, data) {
@@ -174,12 +176,12 @@ function delSc() {
         }
     }
     //if there are more calls in the queue
-    if (_.si.length > 0) {
+    if (s.length > 0) {
         Timer.set(
             1000, //the delay
             false,
             function () {
-                delSc();
+                delSc(s);
             });
     }
     else {
@@ -220,10 +222,8 @@ function main() {
     // build datetime for Elering query
     let isoTime = new Date((shEpochUtc + tzInSec + _.dayInSec * addDays) * 1000).toISOString().slice(0, 10);
     let isoTimePlusDay = new Date((shEpochUtc + tzInSec + (_.dayInSec * (addDays + 1))) * 1000).toISOString().slice(0, 10);
-    let hrStart = JSON.stringify(24 - tz);
-    let hrEnd = JSON.stringify(24 - tz - 1);
-    let dtStart = isoTime + "T" + hrStart + ":00Z";
-    let dtEnd = isoTimePlusDay + "T" + hrEnd + ":00Z";
+    let dtStart = isoTime + "T" + (24 - tz) + ":00Z";
+    let dtEnd = isoTimePlusDay + "T" + (24 - tz - 1) + ":00Z";
     _.elUrl = _.elering + "&start=" + dtStart + "&end=" + dtEnd;
 
     print(_.pId, "Shelly ", shDt);
@@ -232,11 +232,7 @@ function main() {
 
     _.heatTime = s.heatingMode.heatingTime;
     //if weather forecast used for heating hours
-    if (s.heatingMode.isFcstUsed) {
-        getForecast();
-    } else {
-        getElering();
-    }
+    s.heatingMode.isFcstUsed ? getForecast() : getElering();
 }
 
 /**
@@ -373,6 +369,7 @@ function priceCalc(res, err, msg) {
         }
         res = null; //to save memory
 
+        let newScheds = [];
         //store the timestamp into memory
         _.tsPrices = epoch();
         print(_.pId, "We got market prices from Elering ", new Date().toString());
@@ -383,12 +380,12 @@ function priceCalc(res, err, msg) {
         if (s.heatingMode.timePeriod <= 0) {
             for (let a = 0; a < eleringPrices.length; a++) {
                 if (eleringPrices[a][1] < s.alwaysOnLowPrice) {
-                    _.newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1], 0]);
+                    newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1], 0]);
                     print(_.pId, "Energy price + transfer fee " + eleringPrices[a][1] + " EUR/MWh at " + new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
                 }
             }
 
-            if (!_.newScheds.length) {
+            if (!newScheds.length) {
                 print(_.pId, "No energy prices below min price level. No heating.")
             }
         }
@@ -414,7 +411,7 @@ function priceCalc(res, err, msg) {
 
             for (let a = 0; a < sortedPeriod.length; a++) {
                 if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] > s.alwaysOffHighPrice)) {
-                    _.newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
+                    newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
                 }
 
                 //If some hours are too expensive to use for heating, then just let user know for this
@@ -428,38 +425,39 @@ function priceCalc(res, err, msg) {
         sortedPeriod = null;
         period = null;
     }
-    listScheds();
+    listScheds(sort(newScheds, 0));
 }
 
 /**
 Get all the existing schedulers to check duplications
  */
-function listScheds() {
+function listScheds(newScheds) {
     Shelly.call("Schedule.List", {},
         function (res, err, msg, data) {
             if (res === 0) {
-                // print(_.pId, "No existing schedulers found.");
-                createScheds([]);
+                // No existing schedulers found
+                createScheds([], data.s);
             }
             else {
-                // print(_.pId, "Found ", res.jobs.length, " schedulers.");
-                createScheds(res.jobs);
+                // Found existing schedulers
+                createScheds(res.jobs, data.s);
                 res = null; //to save memory
             }
-        });
+        }, { s: newScheds }
+    );
 }
 
 /**
 Create all schedulers, the Shelly limit is 20.
  */
-function createScheds(listScheds) {
+function createScheds(listScheds, newScheds) {
     //logic below is a non-blocking method for RPC calls to create all schedulers one by one
     if (_.ct < 6 - _.mc) {
-        for (let i = 0; i < _.mc && i < _.newScheds.length; i++) {
+        for (let i = 0; i < _.mc && i < newScheds.length; i++) {
             let isExist = false;
-            let hour = _.newScheds[0][0];
-            let ctPeriod = _.newScheds[0][2];
-            let price = _.newScheds.splice(0, 1)[0][1]; //cut the array one-by-one
+            let hour = newScheds[0][0];
+            let ctPeriod = newScheds[0][2];
+            let price = newScheds.splice(0, 1)[0][1]; //cut the array one-by-one
             let timespec = "0 0 " + hour + " * * *";
             //looping through existing schedulers
             for (let k = 0; k < listScheds.length; k++) {
@@ -502,12 +500,12 @@ function createScheds(listScheds) {
     }
 
     //if there are more calls in the queue
-    if (_.newScheds.length > 0) {
+    if (newScheds.length > 0) {
         Timer.set(
             1000, //the delay
             false,
             function () {
-                createScheds(listScheds);
+                createScheds(listScheds, newScheds);
             });
     }
     else {

@@ -1,7 +1,6 @@
 //This is a watchdog reference code
 let _ = {
     sId: 0,
-    si: [],
     mc: 3,
     ct: 0,
 };
@@ -14,9 +13,10 @@ Shelly.addStatusHandler(function (status) {
 function start(sId) {
     Shelly.call('KVS.Get', { key: 'schedulerIDs' + sId }, function (res, err, msg, data) {
         if (res) {
-            _.si = JSON.parse(res.value);
+            let v = [];
+            v = JSON.parse(res.value);
             res = null;
-            delSc(_.si, data.sId);
+            delSc(v, data.sId);
         }
     }, { sId: sId });
 }
@@ -50,6 +50,7 @@ function delKVS(sId) {
         return;
     }
     Shelly.call('KVS.Delete', { key: 'schedulerIDs' + sId });
+    Shelly.call('KVS.Delete', { key: 'version' + sId });
     Shelly.call('KVS.Delete', { key: 'timestamp' + sId });
     print('Heating script #' + sId, 'is clean');
 }

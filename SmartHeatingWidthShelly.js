@@ -111,10 +111,10 @@ let _ = {
     dayInSec: 60 * 60 * 24,
     sId: Shelly.getCurrentScriptId(),
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
-    mc: 3,
-    ct: 0,
-    si: [],
-    version: 2.5,
+    rpcCl: 3,
+    cntr: 0,
+    schedId: [],
+    version: 2.6,
 };
 
 /*
@@ -149,7 +149,7 @@ function setAutoStart() {
 }
 /* set the default script library */
 function setKvsScrLibr() {
-    Shelly.call("KVS.set", { key: "scripts-library", value: "{\x22url\x22: \x22https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json\x22}" });
+    Shelly.call("KVS.set", { key: "scripts-library", value: '{"url": "https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json"}' });
 }
 
 /*
@@ -157,10 +157,10 @@ Before anything else delete all the old schedulers created by this script.
 */
 function delSc(s) {
     //logic below is a non-blocking method for RPC calls to delete all schedulers one by one
-    if (_.ct < 6 - _.mc) {
-        for (let i = 0; i < _.mc && i < s.length; i++) {
+    if (_.cntr < 6 - _.rpcCl) {
+        for (let i = 0; i < _.rpcCl && i < s.length; i++) {
             let id = s.splice(0, 1)[0];
-            _.ct++;
+            _.cntr++;
             Shelly.call("Schedule.Delete", { id: id },
                 function (res, err, msg, data) {
                     if (err !== 0) {
@@ -169,7 +169,7 @@ function delSc(s) {
                     else {
                         print(_.pId, "Schedule ", data.id, " delete SUCCEEDED.");
                     }
-                    _.ct--;
+                    _.cntr--;
                 },
                 { id: id }
             );
@@ -195,7 +195,7 @@ This one is called after all the old schedulers are deleted.
 */
 function main() {
     //wait until all the schedulers are deleted
-    if (_.ct !== 0) {
+    if (_.cntr !== 0) {
         Timer.set(
             1000,
             false,
@@ -452,8 +452,8 @@ Create all schedulers, the Shelly limit is 20.
  */
 function createScheds(listScheds, newScheds) {
     //logic below is a non-blocking method for RPC calls to create all schedulers one by one
-    if (_.ct < 6 - _.mc) {
-        for (let i = 0; i < _.mc && i < newScheds.length; i++) {
+    if (_.cntr < 6 - _.rpcCl) {
+        for (let i = 0; i < _.rpcCl && i < newScheds.length; i++) {
             let isExist = false;
             let hour = newScheds[0][0];
             let ctPeriod = newScheds[0][2];
@@ -472,7 +472,7 @@ function createScheds(listScheds, newScheds) {
             }
             // only create unique schedulers
             if (!isExist) {
-                _.ct++;
+                _.cntr++;
                 Shelly.call("Schedule.Create", {
                     "id": 0, "enable": true, "timespec": timespec,
                     "calls": [{
@@ -489,9 +489,9 @@ function createScheds(listScheds, newScheds) {
                         }
                         else {
                             print(_.pId, "#" + data.ctPeriod, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
-                            _.si.push(res.id); //create an array of scheduleIDs
+                            _.schedId.push(res.id); //create an array of scheduleIDs
                         }
-                        _.ct--;
+                        _.cntr--;
                     },
                     { hour: hour, price: price, ctPeriod: ctPeriod }
                 );
@@ -518,7 +518,7 @@ Storing the scheduler IDs in KVS to not loose them in case of power outage
  */
 function setKVS() {
     //wait until all the schedulerIDs are collected
-    if (_.ct !== 0) {
+    if (_.cntr !== 0) {
         Timer.set(
             1000,
             false,
@@ -528,12 +528,14 @@ function setKVS() {
         return;
     }
     //schedulers are created, store the IDs to KVS
+    Shelly.call("KVS.set", { key: "version" + _.sId, value: _.version });
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
-    Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.si) },
+    Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedId) },
         function () {
             print(_.pId, "Script v", _.version, " created all the schedules, next heating calculation at", nextChkHr() + ":00.");
             _.loopRunning = false;
         });
+    _.schedId = [];
 }
 
 /**
@@ -638,7 +640,7 @@ Timer.set(_.loopFreq * 1000, true, loop);
 
 /*  ---------  WATCHDOG START  ---------   */
 /** This is the watchdog script code */
-let watchdog = 'let _={sId:0,si:[],mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){e&&(_.si=JSON.parse(e.value),e=null,delSc(_.si,c.sId))}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
+let watchdog = 'let _={sId:0,mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){if(e){let l=[];l=JSON.parse(e.value),e=null,delSc(l,c.sId)}}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"version"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
 /** find watchdog script ID */
 function createWatchdog() {
     Shelly.call('Script.List', null, function (res, err, msg, data) {

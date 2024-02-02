@@ -424,8 +424,8 @@ function priceCalc(res, err, msg) {
         eleringPrices = null;
         sortedPeriod = null;
         period = null;
+        listScheds(sort(newScheds, 0));
     }
-    listScheds(sort(newScheds, 0));
 }
 
 /**

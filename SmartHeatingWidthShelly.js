@@ -109,6 +109,7 @@ let _ = {
     loopFreq: 60, //seconds
     loopRunning: false,
     dayInSec: 60 * 60 * 24,
+    updtDelay: Math.floor(Math.random() * 46), //delay for server requests (max 45min)
     sId: Shelly.getCurrentScriptId(),
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
     rpcCl: 3,
@@ -532,7 +533,7 @@ function setKVS() {
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedId) },
         function () {
-            print(_.pId, "Script v", _.version, " created all the schedules, next heating calculation at", nextChkHr() + ":00.");
+            print(_.pId, "Script v", _.version, " created all the schedules, next heating calculation after", s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24, "hours.");
             _.loopRunning = false;
         });
     _.schedId = [];
@@ -616,8 +617,8 @@ function isUpdtReq(ts) {
     let tsDt = new Date(ts * 1000);
     let isToday = tsDt.getFullYear() === now.getFullYear() && tsDt.getMonth() === now.getMonth() && tsDt.getDate() === now.getDate();
     let isYesterday = tsDt.getFullYear() === yestDt.getFullYear() && tsDt.getMonth() === yestDt.getMonth() && tsDt.getDate() === yestDt.getDate();
-    let isTsAfterChkT = new Date(ts * 1000).getHours() === nextHour;
-    let isChkT = now.getHours() === nextHour;
+    let isTsAfterChkT = tsDt.getHours() === nextHour && isToday;
+    let isChkT = now.getHours() === nextHour && now.getMinutes() >= _.updtDelay;
     return (isChkT && !isTsAfterChkT) || !(isToday || isYesterday);
 }
 

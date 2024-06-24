@@ -533,7 +533,7 @@ function setKVS() {
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedId) },
         function () {
-            print(_.pId, "Script v", _.version, " created all the schedules, next heating calculation after", s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24, "hours.");
+            print(_.pId, "Script v", _.version, " created all the schedules, heating calculations every", s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24, "hours.");
             _.loopRunning = false;
         });
     _.schedId = [];

@@ -533,7 +533,7 @@ function setKVS() {
     Shelly.call("KVS.set", { key: "timestamp" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedId) },
         function () {
-            print(_.pId, "Script v", _.version, " created all the schedules, heating calculations every", s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24, "hours.");
+            print(_.pId, "Script v", _.version, " created all the schedules, next heating calculation at", nextChkHr(1) + (_.updtDelay < 10 ? ":0" : ":") + _.updtDelay;
             _.loopRunning = false;
         });
     _.schedId = [];
@@ -599,9 +599,9 @@ function epoch() {
     return Math.floor(Date.now() / 1000.0);
 }
 /* Next hour for heating calculation */
-function nextChkHr() {
+function nextChkHr(addHr) {
     let chkT = s.heatingMode.isFcstUsed ? s.heatingMode.timePeriod : 24;
-    let hr = (Math.ceil((new Date().getHours() + 1) / chkT) * chkT) - 1;
+    let hr = (Math.ceil((new Date(Date.now() + (addHr * 60 * 60 * 1000)).getHours() + 1) / chkT) * chkT) - 1;
     return hr > 23 ? 23 : hr;
 }
 /**
@@ -611,7 +611,7 @@ Getting prices or forecast for today if
     * prices or forecast needs regular update
  */
 function isUpdtReq(ts) {
-    let nextHour = nextChkHr();
+    let nextHour = nextChkHr(0);
     let now = new Date();
     let yestDt = new Date(now - _.dayInSec * 1000);
     let tsDt = new Date(ts * 1000);

@@ -115,7 +115,7 @@ let _ = {
     rpcCl: 3,
     cntr: 0,
     schedId: [],
-    version: 2.7,
+    version: 2.8,
 };
 
 /*

@@ -115,7 +115,7 @@ let _ = {
     rpcCl: 3,
     cntr: 0,
     schedId: [],
-    version: 2.8,
+    version: 2.9,
 };
 
 /*
@@ -652,8 +652,11 @@ function checkShellyTime() {
         return;
     }
 }
-//start the script with the time testing
-timer_handle = Timer.set(500, true, checkShellyTime); //0,5 sec until the time is OK
+//execute the checkShellyTime when the script starts
+checkShellyTime();
+//start 0,5 sec loop-timer to check Shelly time 
+//if Shelly has already time, then this timer will be closed immediately
+timer_handle = Timer.set(500, true, checkShellyTime); 
 
 //start the loop component
 Timer.set(_.loopFreq * 1000, true, loop);

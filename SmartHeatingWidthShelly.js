@@ -53,7 +53,7 @@ let s = {
     elektrilevi: VORK2KUU,      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK2KUU / VORK4 / NONE
     alwaysOnLowPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
     alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
-    isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
+    isOutputInverted: true,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
     defaultTimer: 60,           // Default timer duration, in minutes, for toggling the Shelly state.
     country: "ee",              // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
@@ -114,7 +114,7 @@ let _ = {
     rpcCl: 3,
     cntr: 0,
     schedId: [],
-    version: 2.6,
+    version: 2.7,
 };
 
 /*
@@ -629,13 +629,32 @@ function loop() {
         return;
     }
     _.loopRunning = true;
-    if (isUpdtReq(_.tsPrices) || (s.heatingMode.isFcstUsed && isUpdtReq(_.tsFcst))) {
+    if ((isUpdtReq(_.tsPrices) || s.heatingMode.isFcstUsed && isUpdtReq(_.tsFcst)) && isShellyTimeOk) {
         start();
     } else {
         _.loopRunning = false;
     }
 }
 
+let isShellyTimeOk = false;
+let timer_handle;
+function checkShellyTime() {
+    //check Shelly time
+    let shEpochUtc = Shelly.getComponentStatus("sys").unixtime;
+    if (shEpochUtc > 0) {
+        //if time is OK, then stop the timer
+        Timer.clear(timer_handle);
+        isShellyTimeOk = true;
+    }
+    else {
+        //waiting timeserver response
+        return;
+    }
+}
+//start the script with the time testing
+timer_handle = Timer.set(500, true, checkShellyTime); //0,5 sec until the time is OK
+
+//start the loop component
 Timer.set(_.loopFreq * 1000, true, loop);
 
 /*  ---------  WATCHDOG START  ---------   */

@@ -48,6 +48,12 @@ let HEAT_LOWPRICE = { timePeriod: 0, heatingTime: 0, isFcstUsed: false };
 
 
 /****** USER SETTINGS, START MODIFICATION ******/
+/* 
+After the initial run, all user settings are stored in the Shelly KVS.
+To modify these user settings later, you’ll need to access the Shelly KVS via: Menu → Advanced → KVS on the Shelly web page.
+Once you’ve updated the settings, restart the script to apply the changes.
+This approach simplifies script updates — you don’t need to remember your settings, as they’ll automatically be loaded from the KVS.
+*/
 let s = {
     heatingMode: HEAT24H_FCST,  // HEATING MODE. Different heating modes described above.
     elektrilevi: VORK2KUU,      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK2KUU / VORK4 / NONE
@@ -98,15 +104,15 @@ Forecast temp °C is "feels like": more information here: https://en.wikipedia.o
 
 
 let _ = {
-    openMeteo: "https://api.open-meteo.com/v1/forecast?hourly=apparent_temperature&timezone=auto&forecast_days=1&forecast_hours=" + s.heatingMode.timePeriod,
-    elering: "https://dashboard.elering.ee/api/nps/price/csv?fields=" + s.country,
+    openMeteo: "https://api.open-meteo.com/v1/forecast?hourly=apparent_temperature&timezone=auto&forecast_days=1&forecast_hours=",
+    elering: "https://dashboard.elering.ee/api/nps/price/csv?fields=",
     elUrl: '',
     omUrl: '',
     heatTime: '',
-    ctPeriods: s.heatingMode.timePeriod <= 0 ? 0 : Math.ceil((24 * 100) / (s.heatingMode.timePeriod * 100)), //period count is up-rounded
+    ctPeriods: '', //period count is up-rounded
     tsPrices: '',
     tsFcst: '',
-    loopFreq: 60, //seconds
+    loopFreq: 300, //seconds
     loopRunning: false,
     dayInSec: 60 * 60 * 24,
     updtDelay: Math.floor(Math.random() * 46), //delay for server requests (max 45min)
@@ -114,8 +120,10 @@ let _ = {
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
     rpcCl: 3,
     cntr: 0,
+    rpcBlock: 1,
     schedId: [],
-    version: 2.9,
+    missingParams: [],
+    version: 3.0,
 };
 
 /*
@@ -127,15 +135,7 @@ Get old scheduler IDs from the KVS storage
 function start() {
     setAutoStart();
     setKvsScrLibr();
-
-    Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
-        let si = [];
-        if (res) {
-            si = JSON.parse(res.value);
-            res = null; //to save memory
-        }
-        delSc(si);
-    });
+    checkSettingsKvs();
 }
 /* set the script to sart automatically on boot */
 function setAutoStart() {
@@ -153,6 +153,87 @@ function setKvsScrLibr() {
     Shelly.call("KVS.set", { key: "scripts-library", value: '{"url": "https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json"}' });
 }
 
+function checkSettingsKvs() {
+    //get all KVS values
+    Shelly.call('KVS.GetMany', null, processKVSData);
+}
+function processKVSData(res, err, msg, data) {
+    if (res) {
+        kvsData = res;
+        res = null; //to save memory
+    }
+    let isExistInKvs = false;
+    //iterate through settings and then iterate through KVS
+    for (var k in s) {
+        for (var i in kvsData) {
+            //check if settings found in KVS
+            if (kvsData[i][k + _.sId] != null) {
+                //KVS store can't handle strings properly
+                try {
+                    s[k] = JSON.parse(kvsData[i][k + _.sId].value);
+                }
+                catch (e) {
+                    s[k] = kvsData[i][k + _.sId].value;
+                }
+                isExistInKvs = true;
+            }
+        }
+        if (isExistInKvs) {
+            isExistInKvs = false;
+        }
+        else {
+            // print("Setting doesn't exist in KVS", k)
+            _.missingParams.push([k, JSON.stringify(s[k])]);
+        }
+    }
+    storeSettingsKvs(_.missingParams);
+}
+let cntr = 0;
+function storeSettingsKvs(missingParams) {
+    if (cntr < 6 - _.rpcCl) {
+        for (let i = 0; i < _.rpcCl && i < missingParams.length; i++) {
+            let value = missingParams[0][1];
+            let key = missingParams.splice(0, 1)[0][0] + _.sId;
+            cntr++;
+            Shelly.call("KVS.set", { key: key, value: value },
+                function (_, error_code, _, data) {
+                    if (error_code !== 0) {
+                        console.log("Store settings", data.key, data.value, "in KVS failed.");
+                    }
+                    else {
+                        console.log("Store settings", data.key, data.value, "to KVS is OK");
+                    }
+                    cntr--;
+                },
+                { key: key, value: value }
+            );
+        }
+    }
+    //if there are more items in queue
+    if (missingParams.length > 0) {
+        Timer.set(500, false, function () { storeSettingsKvs(missingParams); });
+    }
+    else {
+        _.rpcBlock--; //release RPC calls for watchdog
+        getSchedIDs();
+    }
+}
+
+function getSchedIDs() {
+    //wait until all settings are stored in KVS
+    if (cntr !== 0) {
+        Timer.set(1000, false, function () { getSchedIDs(); });
+        return;
+    }
+    Shelly.call('KVS.Get', { key: "schedulerIDs" + _.sId }, function (res, err, msg, data) {
+        let si = [];
+        if (res) {
+            si = JSON.parse(res.value);
+            res = null; //to save memory
+        }
+        delSc(si);
+    });
+}
 /*
 Before anything else delete all the old schedulers created by this script. 
 */
@@ -178,12 +259,7 @@ function delSc(s) {
     }
     //if there are more calls in the queue
     if (s.length > 0) {
-        Timer.set(
-            1000, //the delay
-            false,
-            function () {
-                delSc(s);
-            });
+        Timer.set(1000, false, function () { delSc(s); });
     }
     else {
         main(); //start the main logic
@@ -197,14 +273,11 @@ This one is called after all the old schedulers are deleted.
 function main() {
     //wait until all the schedulers are deleted
     if (_.cntr !== 0) {
-        Timer.set(
-            1000,
-            false,
-            function () {
-                main();
-            });
+        Timer.set(1000, false, function () { main(); });
         return;
     }
+
+    _.ctPeriods = s.heatingMode.timePeriod <= 0 ? 0 : Math.ceil((24 * 100) / (s.heatingMode.timePeriod * 100)); //period count is up-rounded
     //all old schedulers are now deleted, start the main flow
     //find Shelly timezone
     let shEpochUtc = Shelly.getComponentStatus("sys").unixtime;
@@ -225,7 +298,7 @@ function main() {
     let isoTimePlusDay = new Date((shEpochUtc + tzInSec + (_.dayInSec * (addDays + 1))) * 1000).toISOString().slice(0, 10);
     let dtStart = isoTime + "T" + (24 - tz) + ":00Z";
     let dtEnd = isoTimePlusDay + "T" + (24 - tz - 1) + ":00Z";
-    _.elUrl = _.elering + "&start=" + dtStart + "&end=" + dtEnd;
+    _.elUrl = _.elering + s.country + "&start=" + dtStart + "&end=" + dtEnd;
 
     print(_.pId, "Shelly ", shDt);
     shDt = null;
@@ -242,7 +315,7 @@ Get Open-Meteo min and max "feels like" temperatures
 function getForecast() {
     let lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
     let lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
-    _.omUrl = _.openMeteo + "&latitude=" + lat + "&longitude=" + lon;
+    _.omUrl = _.openMeteo + s.heatingMode.timePeriod + "&latitude=" + lat + "&longitude=" + lon;
     print(_.pId, "Get forecast from: ", _.omUrl)
     try {
         Shelly.call("HTTP.GET", { url: _.omUrl, timeout: 5, ssl_ca: "*" }, fcstCalc);
@@ -369,6 +442,12 @@ function priceCalc(res, err, msg) {
             activePos = res.body_b64.indexOf("\n", activePos);
         }
         res = null; //to save memory
+        //if elering API returns less than 23 rows, the script will try to download the data again after set of minutes
+        if (eleringPrices.length < 23) {
+            print(_.pId, "Elering API didn't return prices, checking again in ", _.loopFreq, " seconds.");
+            _.loopRunning = false;
+            return;
+        }
 
         let newScheds = [];
         //store the timestamp into memory
@@ -502,12 +581,7 @@ function createScheds(listScheds, newScheds) {
 
     //if there are more calls in the queue
     if (newScheds.length > 0) {
-        Timer.set(
-            1000, //the delay
-            false,
-            function () {
-                createScheds(listScheds, newScheds);
-            });
+        Timer.set(1000, false, function () { createScheds(listScheds, newScheds); });
     }
     else {
         setKVS();
@@ -520,12 +594,7 @@ Storing the scheduler IDs in KVS to not loose them in case of power outage
 function setKVS() {
     //wait until all the schedulerIDs are collected
     if (_.cntr !== 0) {
-        Timer.set(
-            1000,
-            false,
-            function () {
-                setKVS();
-            });
+        Timer.set(1000, false, function () { setKVS(); });
         return;
     }
     //schedulers are created, store the IDs to KVS
@@ -656,7 +725,7 @@ function checkShellyTime() {
 checkShellyTime();
 //start 0,5 sec loop-timer to check Shelly time 
 //if Shelly has already time, then this timer will be closed immediately
-timer_handle = Timer.set(500, true, checkShellyTime); 
+timer_handle = Timer.set(500, true, checkShellyTime);
 
 //start the loop component
 Timer.set(_.loopFreq * 1000, true, loop);
@@ -666,6 +735,11 @@ Timer.set(_.loopFreq * 1000, true, loop);
 let watchdog = 'let _={sId:0,mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){if(e){let l=[];l=JSON.parse(e.value),e=null,delSc(l,c.sId)}}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"version"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
 /** find watchdog script ID */
 function createWatchdog() {
+    //waiting other RPC calls to be completed
+    if (_.rpcBlock !== 0) {
+        Timer.set(1000, false, function () { createWatchdog(); });
+        return;
+    }
     Shelly.call('Script.List', null, function (res, err, msg, data) {
         if (res) {
             let wdId = 0;

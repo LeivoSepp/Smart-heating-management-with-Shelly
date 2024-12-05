@@ -123,7 +123,7 @@ let _ = {
     rpcBlock: 1,
     schedId: [],
     missingParams: [],
-    version: 3.0,
+    version: 3.1,
 };
 
 /*
@@ -377,6 +377,7 @@ function getElering() {
     catch (error) {
         print(_.pId, "Oh no, Elering ", error);
         print(_.pId, "Get Elering failed, checking again in ", _.loopFreq, " seconds.");
+        setShellyManualMode("Elering prices are failed (HTTP.GET error)"); // Elering prices are missing, turn Shelly on manually
         _.loopRunning = false;
     }
 }
@@ -388,6 +389,7 @@ Creating time periods etc.
 function priceCalc(res, err, msg) {
     if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
         print(_.pId, "Get Elering failed, checking again in ", _.loopFreq, " seconds.");
+        setShellyManualMode("Elering prices are failed (the response is not JSON)"); // Elering prices are missing, turn Shelly on manually
         _.loopRunning = false;
     }
     else {
@@ -445,6 +447,7 @@ function priceCalc(res, err, msg) {
         //if elering API returns less than 23 rows, the script will try to download the data again after set of minutes
         if (eleringPrices.length < 23) {
             print(_.pId, "Elering API didn't return prices, checking again in ", _.loopFreq, " seconds.");
+            setShellyManualMode("Elering prices are failed (the API didn't return prices)"); // Elering prices are missing, turn Shelly on manually
             _.loopRunning = false;
             return;
         }
@@ -627,6 +630,31 @@ function setShellyTimer(isOutInv, timerMin) {
     });
 }
 
+//if the internet is not working or Elering is down, then just simply turn Shelly on
+function setShellyManualMode(reason) {
+    //remove ShellyTimer
+    Shelly.call("Switch.SetConfig", {
+        "id": 0,
+        config: {
+            "name": "Switch0",
+            "auto_on": false,
+            "auto_off": false,
+        }
+    });
+    //turn Shelly manually on as the internet connection or Elering prices are missing
+    Shelly.call("Switch.Set", { id: s.relayID, on: !s.isOutputInverted },
+        function (res, err, msg, data) {
+            if (err !== 0) {
+                print(_.pId, "# ", data.reason, ", and there is also an unidentified error preventing Shelly from being turned on.");
+            }
+            else {
+                print(_.pId, "# Shelly is turned on manually because ", data.reason + ".");
+            }
+        },
+        { reason: reason }
+    );
+}
+
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
 function sort(array, sortby) {
     // Sorting array from smallest to larger
@@ -717,6 +745,7 @@ function checkShellyTime() {
         isShellyTimeOk = true;
     }
     else {
+        setShellyManualMode("Internet connection is down"); //Internet connection is missing, turn Shelly on manually
         //waiting timeserver response
         return;
     }

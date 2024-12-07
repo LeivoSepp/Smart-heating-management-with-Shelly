@@ -162,28 +162,21 @@ function processKVSData(res, err, msg, data) {
         kvsData = res;
         res = null; //to save memory
     }
+    //this old version number is used to maintain backward compatibility
+    let oldVersionNumber = (kvsData["items"]["version" + _.sId] != null && kvsData["items"]["version" + _.sId].value >= 3.2) ? 3.2 : 0;
     let isExistInKvs = false;
     //iterate through settings and then iterate through KVS
     for (var k in s) {
         for (var i in kvsData) {
             //check if settings found in KVS
             if (kvsData[i][k + _.sId] != null) {
-                if ([k] == "elektrilevi") {
-                    try {
-                        //this is for backward compatibility as the elektrilevi value changed from object to string
-                        eval(kvsData[i][k + _.sId].value);
-                        //if no error thrown, then proceed normally
-                        s[k] = kvsData[i][k + _.sId].value;
+                if ([k] == "elektrilevi" || [k] == "country") {
+                    if (oldVersionNumber >= 3.2) {
+                        s[k] = kvsData[i][k + _.sId].value; //do not convert strings
                     }
-                    catch (e) {
-                        break; //break the loop to store new elektrilevi param to KVS
+                    else {
+                        break; //store new versions of elektrilevi and country values <- this is for backward compatibility
                     }
-                }
-                else if ([k] == "country" && kvsData[i][k + _.sId].value.length > 2) {
-                    break; //break the loop to store new country param to KVS without quotation marks "ee" -> ee
-                }
-                else if ([k] == "country") {
-                    s[k] = kvsData[i][k + _.sId].value; //do not convert strings
                 }
                 else {
                     s[k] = JSON.parse(kvsData[i][k + _.sId].value); //convert string values to object
@@ -790,7 +783,7 @@ Timer.set(_.loopFreq * 1000, true, loop);
 
 /*  ---------  WATCHDOG START  ---------   */
 /** This is the watchdog script code */
-let watchdog = 'let _={sId:0,mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){if(e){let l=[];l=JSON.parse(e.value),e=null,delSc(l,c.sId)}}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"version"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
+let watchdog = 'let _={sId:0,mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){if(e){let l=[];l=JSON.parse(e.value),e=null,delSc(l,c.sId)}}),{sId:e})}function delSc(e,l){if(_.ct<6-_.mc)for(let t=0;t<_.mc&&t<e.length;t++){let t=e.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:t},(function(e,t,c,i){0!==t?print("Script #"+l,"schedule ",i.id," del FAIL."):print("Script #"+l,"schedule ",i.id," del OK."),_.ct--}),{id:t})}e.length>0?Timer.set(1e3,!1,(function(){delSc(e,l)})):delKVS(l)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),Shelly.call("KVS.Delete",{key:"timestamp"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,(function(){delKVS(e)}))}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
 /** find watchdog script ID */
 function createWatchdog() {
     //waiting other RPC calls to be completed

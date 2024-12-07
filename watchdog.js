@@ -50,7 +50,6 @@ function delKVS(sId) {
         return;
     }
     Shelly.call('KVS.Delete', { key: 'schedulerIDs' + sId });
-    Shelly.call('KVS.Delete', { key: 'version' + sId });
     Shelly.call('KVS.Delete', { key: 'timestamp' + sId });
     print('Heating script #' + sId, 'is clean');
 }

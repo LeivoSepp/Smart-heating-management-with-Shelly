@@ -11,12 +11,12 @@ created by Leivo Sepp, 25.12.2023
 https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
-/* Elektrilevi electricity transmission fees (EUR/MWh): */
-let VORK1 = { dayRt: 72, nightRt: 72 };
-let VORK2 = { dayRt: 87, nightRt: 50 };
-let VORK2KUU = { dayRt: 56, nightRt: 33 };
-let VORK4 = { dayRt: 37, nightRt: 21 };
-let NONE = { dayRt: 0, nightRt: 0 };
+/* Elektrilevi electricity transmission fees (EUR/MWh): https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu */
+let VORK1 = { dayRate: 77, nightRate: 77, dayMaxRate: 77, holidayMaxRate: 77 };
+let VORK2 = { dayRate: 60, nightRate: 35, dayMaxRate: 60, holidayMaxRate: 35 };
+let VORK4 = { dayRate: 37, nightRate: 21, dayMaxRate: 37, holidayMaxRate: 21 };
+let VORK5 = { dayRate: 53, nightRate: 30, dayMaxRate: 82, holidayMaxRate: 47 };
+let NONE = { dayRate: 0, nightRate: 0, dayMaxRate: 0, holidayMaxRate: 0 };
 
 // timePeriod: duration of each time period in hours, (0 -> only min-max price used, 24 -> period is one day).
 // heatingTime: duration of heating in hours during each designated period.
@@ -55,8 +55,8 @@ Once you’ve updated the settings, restart the script to apply the changes.
 This approach simplifies script updates — you don’t need to remember your settings, as they’ll automatically be loaded from the KVS.
 */
 let s = {
-    heatingMode: HEAT24H_FCST,  // HEATING MODE. Different heating modes described above.
-    elektrilevi: VORK2KUU,      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK2KUU / VORK4 / NONE
+    heatingMode: HEAT24H_FCST, // HEATING MODE. Different heating modes described above.
+    elektrilevi: "VORK2",      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK4 /VORK5 / NONE
     alwaysOnLowPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
     alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
     isOutputInverted: true,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
@@ -123,7 +123,7 @@ let _ = {
     rpcBlock: 1,
     schedId: [],
     missingParams: [],
-    version: 3.1,
+    version: 3.2,
 };
 
 /*
@@ -168,12 +168,25 @@ function processKVSData(res, err, msg, data) {
         for (var i in kvsData) {
             //check if settings found in KVS
             if (kvsData[i][k + _.sId] != null) {
-                //KVS store can't handle strings properly
-                try {
-                    s[k] = JSON.parse(kvsData[i][k + _.sId].value);
+                if ([k] == "elektrilevi") {
+                    try {
+                        //this is for backward compatibility as the elektrilevi value changed from object to string
+                        eval(kvsData[i][k + _.sId].value);
+                        //if no error thrown, then proceed normally
+                        s[k] = kvsData[i][k + _.sId].value;
+                    }
+                    catch (e) {
+                        break; //break the loop to store new elektrilevi param to KVS
+                    }
                 }
-                catch (e) {
-                    s[k] = kvsData[i][k + _.sId].value;
+                else if ([k] == "country" && kvsData[i][k + _.sId].value.length > 2) {
+                    break; //break the loop to store new country param to KVS without quotation marks "ee" -> ee
+                }
+                else if ([k] == "country") {
+                    s[k] = kvsData[i][k + _.sId].value; //do not convert strings
+                }
+                else {
+                    s[k] = JSON.parse(kvsData[i][k + _.sId].value); //convert string values to object
                 }
                 isExistInKvs = true;
             }
@@ -181,11 +194,16 @@ function processKVSData(res, err, msg, data) {
         if (isExistInKvs) {
             isExistInKvs = false;
         }
-        else {
-            // print("Setting doesn't exist in KVS", k)
+        else if (typeof s[k] === "object") {
             _.missingParams.push([k, JSON.stringify(s[k])]);
         }
+        else {
+            _.missingParams.push([k, s[k]]);
+        }
     }
+    //convert the elektrilevi packet value to variable
+    s.elektrilevi = eval(s.elektrilevi);
+
     storeSettingsKvs(_.missingParams);
 }
 let cntr = 0;
@@ -211,7 +229,7 @@ function storeSettingsKvs(missingParams) {
     }
     //if there are more items in queue
     if (missingParams.length > 0) {
-        Timer.set(500, false, function () { storeSettingsKvs(missingParams); });
+        Timer.set(1000, false, function () { storeSettingsKvs(missingParams); });
     }
     else {
         _.rpcBlock--; //release RPC calls for watchdog
@@ -431,11 +449,22 @@ function priceCalc(res, err, msg) {
             //Add transfer fees (if any)
             let hour = new Date(row[0] * 1000).getHours();
             let day = new Date(row[0] * 1000).getDay();
-            if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
-                row[1] += s.elektrilevi.nightRt; //night fee
+            let month = new Date(row[0] * 1000).getMonth();
+            // The peak holiday rate applies from November to March on Saturdays, Sundays at 16:00–20:00
+            if ((month >= 10 || month <= 2) && (0 === day || 6 === day) && hour >= 16 && hour < 20) {
+                row[1] += s.elektrilevi.holidayMaxRate;
             }
+            // The peak daytime rate applies from November to March: from Monday to Friday at 09:00–12:00 and at 16:00–20:00
+            else if ((month >= 10 || month <= 2) && (hour >= 9 && hour < 12 || hour >= 16 && hour < 20)) {
+                row[1] += s.elektrilevi.dayMaxRate;
+            }
+            //The night-time rate is valid from Monday to Friday at 22:00–07:00, as well as on Saturdays, Sundays all night and day
+            else if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
+                row[1] += s.elektrilevi.nightRate; //night fee
+            }
+            //The daytime rate applies from Monday to Friday at 07:00–22:00
             else {
-                row[1] += s.elektrilevi.dayRt; //day fee
+                row[1] += s.elektrilevi.dayRate; //day fee
             }
 
             //Adding stuff
@@ -752,9 +781,9 @@ function checkShellyTime() {
 }
 //execute the checkShellyTime when the script starts
 checkShellyTime();
-//start 0,5 sec loop-timer to check Shelly time 
+//start 1 sec loop-timer to check Shelly time 
 //if Shelly has already time, then this timer will be closed immediately
-timer_handle = Timer.set(500, true, checkShellyTime);
+timer_handle = Timer.set(1000, true, checkShellyTime);
 
 //start the loop component
 Timer.set(_.loopFreq * 1000, true, loop);

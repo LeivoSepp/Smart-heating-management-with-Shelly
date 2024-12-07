@@ -92,16 +92,15 @@ Heating mode options are described in the following table.
 |``{ "timePeriod": 4, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
 |``{ "timePeriod": 0, "heatingTime": 0,"isFcstUsed": false }``|Heating is only activated during hours when the **price is lower** than the specified ``alwaysOnLowPrice``.|
    
-
-1. ``isOutputInverted: true`` - Configures the relay state to either normal or inverted.
+8. ``isOutputInverted: true`` - Configures the relay state to either normal or inverted.
     * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
     * ``false`` - Normal relay state, used for water heaters. 
 
-2. ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``. This setting is applicable only if weather forecast used.
+9. ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``. This setting is applicable only if weather forecast used.
     * ``0`` - flat
     * ``1`` - steep
 
-3.  ``relayID: 0`` - Configures the Shelly relay ID when using a Shelly device with multiple relays. Default ``0``.
+10.  ``relayID: 0`` - Configures the Shelly relay ID when using a Shelly device with multiple relays. Default ``0``.
 
 
 ## Important to know

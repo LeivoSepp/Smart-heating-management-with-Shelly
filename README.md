@@ -2,7 +2,7 @@
 
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
   - [Script Overview](#script-overview)
-  - [Configuration parameters](#configuration-parameters)
+  - [Configuring Script parameters](#configuring-script-parameters)
   - [Important to know](#important-to-know)
 - [Smart heating algorithms](#smart-heating-algorithms)
   - [Weather Forecast Algorithm](#weather-forecast-algorithm)
@@ -13,7 +13,7 @@
 - [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
 - [How to Install this Script](#how-to-install-this-script)
   - [Installation](#installation)
-  - [Configuring Script Parameters](#configuring-script-parameters)
+  - [Updating Script](#updating-script)
   - [How to Verify Script Execution](#how-to-verify-script-execution)
   - [How the Script Operates](#how-the-script-operates)
 - [Troubleshooting](#troubleshooting)
@@ -23,73 +23,86 @@
   - [Advanced → Key Value Storage → Script Data](#advanced--key-value-storage--script-data)
 
 ## Script Overview
-This Shelly script is designed to retrieve energy market prices from Elering and
-activate heating during the most cost-effective hours each day, employing various algorithms. 
+This Shelly script is designed to optimize heating activation by leveraging energy market prices from Elering, ensuring heating operates during the most cost-effective hours using various algorithms.
 
-1. Dynamic calculation of heating time for the next day based on weather forecasts.
-2. Division of heating into time periods, with activation during the cheapest hour within each period.
-3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
+Key Features:
+1. **Dynamic Heating Time Calculation**:
+Calculates optimal heating times for the next day based on weather forecasts and energy prices.
 
+2. **Time Period Division**:
+Divides the day into time periods and activates heating during the cheapest hour within each period.
+
+3. **Price-Level Utilization**:
+Employs minimum and maximum price thresholds to keep the Shelly system consistently on or off based on cost efficiency.
+
+**Execution Schedule**:
 The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.    
 
-## Configuration parameters
+## Configuring Script parameters
 
-* ``heatingMode: HEAT24H_FCST`` - Heating mode, options are described in the following table.
+During the initial script run, all parameters are saved to the Shelly KVS store. These settings can be modified through the Shelly web interface. 
 
-> You can customize or change the heating modes to better suit your personal preferences and specific situations. This flexibility allows you to adjust the system based on your needs, energy considerations, and comfort requirements.
+To update them, access the Shelly device via its IP address, navigate to **Menu &rarr; Advanced &rarr; KVS**, and locate the desired settings.
 
-|Heating mode|Description|Best usage|
-|---|---|---|
-|``HEAT24H_FCST``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
-|``HEAT12H_FCST``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
-|``HEAT6H_FCST``|The heating time for each **6-hour** period depends on the **outside temperature**.|Air source heat pumps, radiators or underfloor heating panels with small water tank capable of retaining energy for a duration of 3 to 6 hours.
-|``HEAT24H_20H``|Heating is activated during the **20** most cost-effective hours in a **day**.|Ventilation system.
-|``HEAT24H_12H``|Heating is activated during the **12** most cost-effective hours in a **day**.|Big water tank 1000L or more.
-|``HEAT24H_8H``|Heating is activated during the **8** most cost-effective hours in a **day**.|Big water tank 1000L or more.
-|``HEAT12H_6H``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
-|``HEAT12H_2H``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 150L hot water boiler for a little household.
-|``HEAT12H_1H``|Heating is activated during the **single** most cost-effective hours within every **12-hour** period. |A 100L hot water boiler for a single person.
-|``HEAT6H_2H``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
-|``HEAT6H_1H``|Heating is activated during the **single** most cost-effective hours within every **6-hour** period. |A 100L hot water boiler for a small household with two people.
-|``HEAT4H_2H``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
-|``HEAT4H_1H``|Heating is activated during the **single** most cost-effective hours within every **4-hour** period.|A 100L hot water boiler for a household with four or more people.
-|``HEAT_LOWPRICE``|Heating is only activated during hours when the **price is lower** than the specified ``alwaysOnLowPrice``.|
-   
-* ``elektrilevi: VORK2KUU`` - Elektrilevi transmission fee, options are the following.
+<img src="images/ShellyKVS.jpg" alt="Shelly KVS" width="550">
 
-|Heating mode|Description|
-|---|---|
-|``VORK1``|Elektrilevi Võrk1. Day and night rate is 72 EUR/MWh|
-|``VORK2``|Elektrilevi Võrk2. Day 87 and night 50 EUR/MWh|
-|``VORK2KUU``|Elektrilevi Võrk2 with monthly fee. Day 56 and night 33 EUR/MWh|
-|``VORK4``|Elektrilevi Võrk4. Day 37 and night 21 EUR/MWh|
-|``NONE``|Transmission fee is set to 0.|
+1. ``alwaysOffHighPrice: 300`` - Keep heating always OFF if energy price + network fee higher than this value (EUR/MWh).
 
-* ``alwaysOnLowPrice: 10`` - Keep heating always ON if energy price lower than this value (EUR/MWh).
+2. ``alwaysOnLowPrice: 10`` - Keep heating always ON if energy price + network fee lower than this value (EUR/MWh).
 
-* ``alwaysOffHighPrice: 300`` - Keep heating always OFF if energy price higher than this value (EUR/MWh).
-
-* ``isOutputInverted: false`` - Configures the relay state to either normal or inverted.
-    * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
-    * ``false`` - Normal relay state. 
-
-* ``relayID: 0`` - Configures the Shelly relay ID when employing a Shelly device with multiple relays. Default ``0``.
-
-* ``defaultTimer: 60`` - Configures the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
-
-* ``country: "ee"`` - Specifies the country for energy prices: 
+3. ``country: ee`` - Specifies the country for energy prices: 
     * ``ee`` - Estonia
     * ``fi`` - Finland
     * ``lt`` - Lithuania
     * ``lv`` - Latvia
 
-* ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
+4. ``defaultTimer: 60`` - Configures the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
+
+5. ``elektrilevi: VORK2`` - Elektrilevi network package, please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu). Options are the following.
+
+|Network package|Description||
+|---|---|-|
+|``VORK1``|Day and night basic rate 77 EUR/MWh| <img src="images/Vork1.jpg" alt="Elektrilevi Võrk 1" width="200"> |
+|``VORK2``|Day 60 EUR/MWh <br> Night 35 EUR/MWh|<img src="images/Vork2-4.jpg" alt="Elektrilevi Võrk 2, 4" width="250">|
+|``VORK4``|Day 37 EUR/MWh <br> Night 21 EUR/MWh|<img src="images/Vork2-4.jpg" alt="Elektrilevi Võrk 2, 4" width="250">|
+|``VORK5``|Day 53 EUR/MWh <br> Night 30 EUR/MWh <br> Day Peak time 82 EUR/MWh <br> Holiday Peak Time 47 EUR/MWh|<img src="images/Vork5-1.jpg" alt="Elektrilevi Võrk 5" width="250"><img src="images/Vork5-2.jpg" alt="Elektrilevi Võrk 5" width="250">|
+|``NONE``|Network fee is set to 0 and it will not taken into account.||
+
+6. ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
     * ``-10`` - less heating
     * ``10`` - more heating
 
-* ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``. This setting is applicable only if weather forecast used.
+7. ``heatingMode: { "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }`` 
+
+Heating mode options are described in the following table.
+
+> You can customize or change the heating modes to better suit your personal preferences and specific situations. This flexibility allows you to adjust the system based on your needs, energy considerations, and comfort requirements. 
+
+|Heating mode|Description|Best usage|
+|---|---|---|
+|``{ "timePeriod": 24, "heatingTime": 0,"isFcstUsed": true }``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
+|``{ "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
+|``{ "timePeriod": 6, "heatingTime": 0,"isFcstUsed": true }``|The heating time for each **6-hour** period depends on the **outside temperature**.|Air source heat pumps, radiators or underfloor heating panels with small water tank capable of retaining energy for a duration of 3 to 6 hours.
+|``{ "timePeriod": 24, "heatingTime": 20,"isFcstUsed": false }``|Heating is activated during the **20** most cost-effective hours in a **day**.|Ventilation system.
+|``{ "timePeriod": 24, "heatingTime": 12,"isFcstUsed": false }``|Heating is activated during the **12** most cost-effective hours in a **day**.|Big water tank 1000L or more.
+|``{ "timePeriod": 12, "heatingTime": 6,"isFcstUsed": false }``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
+|``{ "timePeriod": 12, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 150L hot water boiler for a little household.
+|``{ "timePeriod": 12, "heatingTime": 1,"isFcstUsed": false }``|Heating is activated during the **single** most cost-effective hours within every **12-hour** period. |A 100L hot water boiler for a single person.
+|``{ "timePeriod": 6, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
+|``{ "timePeriod": 4, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
+|``{ "timePeriod": 0, "heatingTime": 0,"isFcstUsed": false }``|Heating is only activated during hours when the **price is lower** than the specified ``alwaysOnLowPrice``.|
+   
+
+1. ``isOutputInverted: true`` - Configures the relay state to either normal or inverted.
+    * ``true`` - Inverted relay state. This is required by many heating systems like Nibe or Thermia.
+    * ``false`` - Normal relay state, used for water heaters. 
+
+2. ``powerFactor: 0.5`` - Adjusts the heating curve to be either more gradual (flat) or more aggressive (steep). Default ``0.5``. This setting is applicable only if weather forecast used.
     * ``0`` - flat
     * ``1`` - steep
+
+3.  ``relayID: 0`` - Configures the Shelly relay ID when using a Shelly device with multiple relays. Default ``0``.
+
 
 ## Important to know
 
@@ -98,9 +111,8 @@ The script runs daily after 23:00 or as necessary during the day to set up heati
 * <p>Shelly allows three scripts to run simultaneously. In practice, only two heating scripts can run concurrently because the third script is reserved for the essential "watchdog" script. This "watchdog" script ensures proper cleanup when the heating script is stopped or deleted.</p>
 * <p>To mitigate the impact of power or internet outages, this script operates continuously. It checks every minute to confirm whether updates are needed for energy market prices or the current weather forecast.</p>
 * <p>The "enable" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
-* <p>This script exclusively handles schedulers generated by its own processes. In contrast to the previous version, which featured a "delete all schedulers" command, this script is designed to delete only those schedulers that it has created.</p>
-* <p>When saving the script, avoid immediately clicking "Start" to prevent potential issues with Shelly that may occur if you initiate the start process too quickly. Initiate Start once the saving process, which may take 3-6 seconds, is complete.</p>
-* <p>This solution will only yield benefits if you have an hourly priced energy contract. If your energy contract features a flat rate, this solution will not contribute to reducing your energy bill.</p>
+* <p>This script exclusively handles schedulers generated by its own processes. This script is designed to delete only those schedulers that it has created.</p>
+* <p>This solution will only have benefits if you have an hourly priced energy contract. If your energy contract features a flat rate, this solution will not contribute to reducing your energy bill.</p>
 * This script depends on the internet and these two services:
     * Electricity market price from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET),
     * Weather forecast from [Open-Meteo API](https://open-meteo.com/en/docs).
@@ -191,23 +203,27 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 <img src="images/insertcode.jpg" alt="Insert code" width="750">
 
-6. Configure Parameters:
+6. Configure Initial Parameters:
     - Set heating mode based on your requirements.
-    - Set the Elektrilevi transmission fee contract.
+    - Set the Elektrilevi network package.
     - Set the output relay mode: normal or inverted. 
     - Set the price when the heating is always on.
     - Set the highest price when the heating will never turn on.
 7. Name the script, for instance, "Heating 24h-Forecast," and save. However, avoid immediately clicking "Start" to prevent potential issues with Shelly that may occur if you initiate the start process too quickly.
 8. Initiate Start once the saving process is complete.
 
-## Configuring Script Parameters
+## Updating Script
 
-1. Access the Shelly device web page: Navigate to Settings → Device Information → Device IP → click on the IP address. The Shelly device web page will open; on the left menu, select "<> Scripts."
-2. Choose the script you wish to modify.
-3. Scroll to the top of the script until you encounter "USER SETTINGS, START MODIFICATION."
-4. Adjust parameters as per your specific requirements.
+1. Open script web page in [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
+2. Click the button "Copy raw file". Now the script is in your clipboard memory.
+<img src="images/CopyCode.jpg" alt="Insert code" width="750">
 
-<img src="images/parameters.jpg" alt="Configure Parameters" width="750">
+3. Access the Shelly device web page: Navigate to Settings → Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open; on the left menu, select "<> Scripts."
+4. Open the script you wish to update.
+5. Select all script code and delete it **Ctrl+A** &rarr; **Delete**. 
+6. Paste the code from the clipboard to the script window **Ctrl+V**.
+7. Save the script, the version is now updated. 
+
 
 ## How to Verify Script Execution
 

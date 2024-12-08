@@ -194,7 +194,7 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 ## Installation
 
-1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.cloud/en-ee/products/).
+1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.com/collections/smart-monitoring-saving-energy).
 2. Connect the Shelly device to your personal WiFi network. Refer to the [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
 3. The Shelly firmware must be version 1.0.0 or higher. The script is not compatible with the firmware 0.14.* or older.
 4. Open the Shelly device web page: Click Settings &rarr; Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open, on the left menu click "<> Scripts".

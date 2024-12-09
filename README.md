@@ -69,10 +69,11 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 |``NONE``|Network fee is set to 0 and it will not taken into account.||
 
 6. ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
+Check heating curve impact for heating time [in this section](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
     * ``-10`` - less heating
     * ``10`` - more heating
 
-7. ``heatingMode: { "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }`` 
+1. ``heatingMode: { "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }`` 
 
 Heating mode options are described in the following table.
 

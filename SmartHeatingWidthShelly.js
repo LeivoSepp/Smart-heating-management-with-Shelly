@@ -59,7 +59,7 @@ let s = {
     elektrilevi: "VORK2",      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK4 /VORK5 / NONE
     alwaysOnLowPrice: 10,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
     alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
-    isOutputInverted: true,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
+    isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
     defaultTimer: 60,           // Default timer duration, in minutes, for toggling the Shelly state.
     country: "ee",              // Estonia-ee, Finland-fi, Lithuania-lt, Latvia-lv
@@ -123,7 +123,7 @@ let _ = {
     rpcBlock: 1,
     schedId: [],
     missingParams: [],
-    version: 3.2,
+    version: 3.3,
 };
 
 /*
@@ -158,31 +158,33 @@ function checkSettingsKvs() {
     Shelly.call('KVS.GetMany', null, processKVSData);
 }
 function processKVSData(res, err, msg, data) {
+    let kvsData;
     if (res) {
-        kvsData = res;
+        kvsData = res.items;
         res = null; //to save memory
     }
     //this old version number is used to maintain backward compatibility
-    let oldVersionNumber = (kvsData["items"]["version" + _.sId] != null && kvsData["items"]["version" + _.sId].value >= 3.2) ? 3.2 : 0;
+    let oldVersionNumber = (kvsData["version" + _.sId] != null && kvsData["version" + _.sId].value >= 3.2) ? 3.2 : 0;
     let isExistInKvs = false;
     //iterate through settings and then iterate through KVS
     for (var k in s) {
         for (var i in kvsData) {
             //check if settings found in KVS
-            if (kvsData[i][k + _.sId] != null) {
-                if ([k] == "elektrilevi" || [k] == "country") {
-                    if (oldVersionNumber >= 3.2) {
-                        s[k] = kvsData[i][k + _.sId].value; //do not convert strings
-                    }
-                    else {
-                        break; //store new versions of elektrilevi and country values <- this is for backward compatibility
-                    }
+            if (i == k + _.sId) {
+                if (k == "elektrilevi" || k == "country") {
+                  if (oldVersionNumber >= 3.2) {
+                      s[k] = kvsData[i].value; //do not convert strings
+                  }
+                  else {
+                      break; //store new versions of elektrilevi and country values <- this is for backward compatibility
+                  }
                 }
                 else {
-                    s[k] = JSON.parse(kvsData[i][k + _.sId].value); //convert string values to object
+                    s[k] = JSON.parse(kvsData[i].value); //convert string values to object
                 }
-                isExistInKvs = true;
-            }
+              isExistInKvs = true;
+              break;
+          }
         }
         if (isExistInKvs) {
             isExistInKvs = false;
@@ -194,6 +196,7 @@ function processKVSData(res, err, msg, data) {
             _.missingParams.push([k, s[k]]);
         }
     }
+    kvsData = null; //save memory
     //convert the elektrilevi packet value to variable
     s.elektrilevi = eval(s.elektrilevi);
 
@@ -638,12 +641,11 @@ Set countdown timer to flip Shelly status
  */
 function setShellyTimer(isOutInv, timerMin) {
     let is_on = isOutInv ? "on" : "off";
-    let timerSec = timerMin * 60; //time in seconds
+    let timerSec = timerMin * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
     print(_.pId, "Set Shelly auto " + is_on + " timer for ", timerMin, " minutes.");
     Shelly.call("Switch.SetConfig", {
-        "id": 0,
+        id: s.relayID, 
         config: {
-            "name": "Switch0",
             "auto_on": isOutInv,
             "auto_on_delay": timerSec,
             "auto_off": !isOutInv,
@@ -656,9 +658,8 @@ function setShellyTimer(isOutInv, timerMin) {
 function setShellyManualMode(reason) {
     //remove ShellyTimer
     Shelly.call("Switch.SetConfig", {
-        "id": 0,
+        id: s.relayID,
         config: {
-            "name": "Switch0",
             "auto_on": false,
             "auto_off": false,
         }
@@ -818,7 +819,7 @@ function createScript(id) {
 /** Add code to the watchdog script */
 function putCode(res, err, msg, data) {
     if (err === 0) {
-        print(_.pId, "Watchdog script has been created.");
+        // print(_.pId, "Watchdog script has been created.");
         let scId = res.id > 0 ? res.id : data.id;
         Shelly.call('Script.PutCode', { id: scId, code: watchdog }, startScript, { id: scId });
     }
@@ -829,7 +830,7 @@ function putCode(res, err, msg, data) {
 /** Enable autostart and start the watchdog script */
 function startScript(res, err, msg, data) {
     if (err === 0) {
-        print(_.pId, "Insert code to watchdog script completed.");
+        // print(_.pId, "Insert code to watchdog script completed.");
         if (!Shelly.getComponentConfig("script", data.id).enable) {
             Shelly.call('Script.SetConfig', { id: data.id, config: { enable: true } },
                 function (res, err, msg, data) {
@@ -840,7 +841,7 @@ function startScript(res, err, msg, data) {
         }
         Shelly.call('Script.Start', { id: data.id }, function (res, err, msg, data) {
             if (err === 0) {
-                print(_.pId, "Watchdog script started succesfully.");
+                print(_.pId, "Watchdog script created and started succesfully.");
             }
             else {
                 print(_.pId, "Watchdog script is not started.", msg, ". Schedules are not deleted if heating script is stopped or deleted.");

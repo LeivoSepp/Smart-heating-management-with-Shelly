@@ -7,7 +7,7 @@ activate heating during the most cost-effective hours each day, employing variou
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 The script executes daily after 23:00 to establish heating timeslots for the following day.
 
-created by Leivo Sepp, 16.12.2024
+created by Leivo Sepp, 17.12.2024
 https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
@@ -316,7 +316,7 @@ function storeSettingsKvs(userCongfigNotInKvs) {
             let key = userCongfigNotInKvs.splice(0, 1)[0][0] + _.sId;
             cntr++;
             Shelly.call("KVS.set", { key: key, value: value },
-                function (_, error_code, _, data) {
+                function (res, error_code, error_message, data) {
                     if (error_code !== 0) {
                         print(_.pId, "Store settings", data.key, data.value, "in KVS failed.");
                     } else {
@@ -343,7 +343,7 @@ function deleteAllKvs(userConfig) {
             let key = userConfig.splice(0, 1)[0];
             cntr++;
             Shelly.call("KVS.Delete", { key: key },
-                function (_, error_code, error_message, data) {
+                function (res, error_code, error_message, data) {
                     if (error_code === 0) {
                         print(_.pId, "Deleted " + data.key + " from KVS store");
                     } else {
@@ -390,7 +390,7 @@ function deleteVirtualComponents(vComponents) {
             let key = vComponents.splice(0, 1)[0].key;
             cntr++;
             Shelly.call("Virtual.Delete", { key: key },
-                function (_, error_code, error_message, data) {
+                function (res, error_code, error_message, data) {
                     if (error_code === 0) {
                         print(_.pId, "Deleted " + data.key + " virtual component");
                     } else {
@@ -420,7 +420,7 @@ function addVirtualComponent(virtualComponents) {
             let config = component.config;
             cntr++;
             Shelly.call("Virtual.Add", { type: type, id: id, config: config },
-                function (_, error_code, error_message, data) {
+                function (res, error_code, error_message, data) {
                     if (error_code === 0) {
                         print(_.pId, "Added virtual component: " + data.type + ":" + data.id);
                     } else {

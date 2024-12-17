@@ -3,12 +3,15 @@
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
   - [Script Overview](#script-overview)
   - [Configuring Script parameters](#configuring-script-parameters)
-  - [Important to know](#important-to-know)
-- [Smart heating algorithms](#smart-heating-algorithms)
+    - [Using Shelly App](#using-shelly-app)
+    - [Using Shelly KVS](#using-shelly-kvs)
+  - [Important To Know](#important-to-know)
+  - [Tested Failure Scenarios](#tested-failure-scenarios)
+- [Smart Heating Algorithms](#smart-heating-algorithms)
   - [Weather Forecast Algorithm](#weather-forecast-algorithm)
     - [Advantages of Weather Forecast-Based Heating](#advantages-of-weather-forecast-based-heating)
     - [Shelly Geolocation](#shelly-geolocation)
-    - [Heating curve](#heating-curve)
+    - [Heating Curve](#heating-curve)
   - [Time Period Algorithm](#time-period-algorithm)
 - [Does it Truly Reduce My Electric Bills](#does-it-truly-reduce-my-electric-bills)
 - [How to Install this Script](#how-to-install-this-script)
@@ -40,7 +43,15 @@ The script runs daily after 23:00 or as necessary during the day to set up heati
 
 ## Configuring Script parameters
 
-During the initial script run, all parameters are saved to the Shelly KVS store. These settings can be modified through the Shelly web interface. 
+### Using Shelly App 
+This script supports Shelly Virtual Components, allowing script parameters to be modified remotely using the Shelly app on a mobile phone.
+
+Virtual Components are supported on Shelly Gen 2 Pro devices, as well as all newer Gen 3 and later devices.
+
+<img src="images/ShellyVirtualComponents.jpg" alt="Shelly KVS" width="700">
+
+### Using Shelly KVS 
+For older Shelly devices that do not support Virtual Components, all parameters are saved to the Shelly KVS store. These settings can be modified directly via the Shelly web interface.
 
 To update them, access the Shelly device via its IP address, navigate to **Menu &rarr; Advanced &rarr; KVS**, and locate the desired settings.
 
@@ -50,7 +61,8 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 
 2. ``alwaysOnLowPrice: 10`` - Keep heating always ON if energy price + network fee lower than this value (EUR/MWh).
 
-3. ``country: ee`` - Specifies the country for energy prices: 
+3. ``country: ee`` - Specifies the country for energy prices. Only countries available in the Elering API are supported.
+ 
     * ``ee`` - Estonia
     * ``fi`` - Finland
     * ``lt`` - Lithuania
@@ -58,7 +70,8 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 
 4. ``defaultTimer: 60`` - Configures the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
 
-5. ``elektrilevi: VORK2`` - Elektrilevi network package, please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu). Options are the following.
+5. ``elektrilevi: VORK2`` - this defines the Elektrilevi electricity transmission tariff package. If the package is not relevant, select NONE. 
+Please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu). Options are the following.
 
 |Network package|Description||
 |---|---|-|
@@ -68,8 +81,8 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 |``VORK5``|Day 53 EUR/MWh <br> Night 30 EUR/MWh <br> Day Peak time 82 EUR/MWh <br> Holiday Peak Time 47 EUR/MWh|<img src="images/Vork5-1.jpg" alt="Elektrilevi Võrk 5" width="250"><img src="images/Vork5-2.jpg" alt="Elektrilevi Võrk 5" width="250">|
 |``NONE``|Network fee is set to 0 and it will not taken into account.||
 
-6. ``heatingCurve: 0`` - Adjusts the heating curve by shifting it to the left or right. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
-Check heating curve impact for heating time [in this section](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
+6. ``heatingCurve: 0`` - Forecast impact increases or decreases the number of hours calculated by the algorithm based on the weather forecast. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
+Check heating curve impact for [heating time dependency graphs](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
     * ``-10`` - less heating
     * ``10`` - more heating
 
@@ -81,16 +94,14 @@ Heating mode options are described in the following table.
 
 |Heating mode|Description|Best usage|
 |---|---|---|
-|``{ "timePeriod": 24, "heatingTime": 0,"isFcstUsed": true }``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
-|``{ "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
-|``{ "timePeriod": 6, "heatingTime": 0,"isFcstUsed": true }``|The heating time for each **6-hour** period depends on the **outside temperature**.|Air source heat pumps, radiators or underfloor heating panels with small water tank capable of retaining energy for a duration of 3 to 6 hours.
+|``{ "timePeriod": 24, "heatingTime": 10,"isFcstUsed": true }``|The heating time for **24-hour** period depends on the **outside temperature**.|Concrete floor heating system or big water tank capable of retaining thermal energy for a duration of at least 10 to 15 hours.|
+|``{ "timePeriod": 12, "heatingTime": 5,"isFcstUsed": true }``|The heating time for each **12-hour** period depends on the **outside temperature**.|Gypsum (kipsivalu) floor heating system or water tank capable of retaining thermal energy for a duration of 5 to 10 hours.
+|``{ "timePeriod": 6, "heatingTime": 2,"isFcstUsed": true }``|The heating time for each **6-hour** period depends on the **outside temperature**.|Air source heat pumps, radiators or underfloor heating panels with small water tank capable of retaining energy for a duration of 3 to 6 hours.
 |``{ "timePeriod": 24, "heatingTime": 20,"isFcstUsed": false }``|Heating is activated during the **20** most cost-effective hours in a **day**.|Ventilation system.
 |``{ "timePeriod": 24, "heatingTime": 12,"isFcstUsed": false }``|Heating is activated during the **12** most cost-effective hours in a **day**.|Big water tank 1000L or more.
 |``{ "timePeriod": 12, "heatingTime": 6,"isFcstUsed": false }``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
 |``{ "timePeriod": 12, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 150L hot water boiler for a little household.
-|``{ "timePeriod": 12, "heatingTime": 1,"isFcstUsed": false }``|Heating is activated during the **single** most cost-effective hours within every **12-hour** period. |A 100L hot water boiler for a single person.
 |``{ "timePeriod": 6, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
-|``{ "timePeriod": 4, "heatingTime": 2,"isFcstUsed": false }``|Heating is activated during the **two** most cost-effective hours within every **4-hour** period.|A 200L hot water boiler for a household with six or more people with heavy usage.
 |``{ "timePeriod": 0, "heatingTime": 0,"isFcstUsed": false }``|Heating is only activated during hours when the **price is lower** than the specified ``alwaysOnLowPrice``.|
    
 8. ``isOutputInverted: true`` - Configures the relay state to either normal or inverted.
@@ -104,12 +115,13 @@ Heating mode options are described in the following table.
 10.  ``relayID: 0`` - Configures the Shelly relay ID when using a Shelly device with multiple relays. Default ``0``.
 
 
-## Important to know
+## Important To Know
 
 * <p>When the script is stopped, all schedules are deleted. Shelly only follows the heating algorithm when the script is running.</p>
-* <p>Up to two instances of this script can run concurrently, both employing different algorithm. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly PRO 4PM.</p>
-* <p>Shelly allows three scripts to run simultaneously. In practice, only two heating scripts can run concurrently because the third script is reserved for the essential "watchdog" script. This "watchdog" script ensures proper cleanup when the heating script is stopped or deleted.</p>
-* <p>To mitigate the impact of power or internet outages, this script operates continuously. It checks every minute to confirm whether updates are needed for energy market prices or the current weather forecast.</p>
+* <p>Only one script can run at a time on newer Shelly devices using Virtual Components, as they are limited to a maximum of 10 components.</p>
+* <p>Up to two instances of this script can run concurrently in KVS mode, both employing different algorithm. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly Plus 2PM.</p>
+* <p>This script creates a special "watchdog" script. This "watchdog" script ensures proper cleanup when the heating script is stopped or deleted.</p>
+* <p>To mitigate the impact of internet outages, this script uses parameter heating time to turn on heating based on historically cheap hours.</p>
 * <p>The "enable" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
 * <p>This script exclusively handles schedulers generated by its own processes. This script is designed to delete only those schedulers that it has created.</p>
 * <p>This solution will only have benefits if you have an hourly priced energy contract. If your energy contract features a flat rate, this solution will not contribute to reducing your energy bill.</p>
@@ -119,7 +131,21 @@ Heating mode options are described in the following table.
 
 <br>
 
-# Smart heating algorithms
+## Tested Failure Scenarios
+1. Shelly is working, but the internet goes down due to a home router crash or internet provider malfunction. Shelly time continues running.
+2. After a power outage, the internet is not working, and Shelly has no time.
+3. Elering HTTP error occurs, and the Elering server is not reachable.
+4. Elering API failure happens, and the service is down.
+5. Elering API returns incorrect data, and prices are missing.
+6. Weather forecast HTTP error occurs, and the server is unavailable.
+7. Weather forecast API service error occurs, and the JSON data is not received.
+
+During any of these failures, Shelly uses the ``Heating Time`` duration to turn on heating based on historically cheap hours.
+Historical cheap hours are the following periods: 00:00-08:00, 12:00-15:00, and 20:00-23:00. In error mode, Shelly divides the heating time equally between the first and second halves of the day.
+
+<br>
+
+# Smart Heating Algorithms
 
 ## Weather Forecast Algorithm
 
@@ -145,7 +171,7 @@ To provide accurate weather forecasts, location data is necessary. This enables 
 
 Note: Shelly's location is determined based on your internet provider's IP address, which may or may not accurately reflect your home location. Verify and update the latitude and longitude settings as needed.
 
-### Heating curve
+### Heating Curve
 
 The relationship between temperature and heating time is known as the *heating curve*.
 

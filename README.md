@@ -83,8 +83,8 @@ Please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vo
 
 6. ``heatingCurve: 0`` - Forecast impact increases or decreases the number of hours calculated by the algorithm based on the weather forecast. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
 Check heating curve impact for [heating time dependency graphs](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
-    * ``-10`` - less heating
-    * ``10`` - more heating
+    * ``-6`` - less heating
+    * ``6`` - more heating
 
 1. ``heatingMode: { "timePeriod": 12, "heatingTime": 0,"isFcstUsed": true }`` 
 

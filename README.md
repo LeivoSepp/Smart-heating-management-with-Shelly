@@ -57,9 +57,9 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 
 <img src="images/ShellyKVS.jpg" alt="Shelly KVS" width="550">
 
-1. ``alwaysOffHighPrice: 300`` - Keep heating always OFF if energy price + network fee higher than this value (EUR/MWh).
+1. ``alwaysOffHighPrice: 300`` - Keep heating always OFF if electricity market price higher than this value (EUR/MWh).
 
-2. ``alwaysOnLowPrice: 10`` - Keep heating always ON if energy price + network fee lower than this value (EUR/MWh).
+2. ``alwaysOnLowPrice: 10`` - Keep heating always on if the electricity market price lower than this value (EUR/MWh).
 
 3. ``country: ee`` - Specifies the country for energy prices. Only countries available in the Elering API are supported.
  
@@ -70,7 +70,7 @@ To update them, access the Shelly device via its IP address, navigate to **Menu 
 
 4. ``defaultTimer: 60`` - Configures the default timer duration, in minutes, for toggling the Shelly state. The default value is set to ``60`` to align with hourly changes in energy prices.
 
-5. ``elektrilevi: VORK2`` - this defines the Elektrilevi electricity transmission tariff package. If the package is not relevant, select NONE. 
+5. ``elektrilevi: VORK2`` - this defines the Elektrilevi electricity transmission tariff package. Options include Võrk1, Võrk2, Võrk4, Võrk5, and None. Select None to ignore transmission fees. 
 Please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu). Options are the following.
 
 |Network package|Description||

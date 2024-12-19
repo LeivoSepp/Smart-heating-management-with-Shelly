@@ -34,8 +34,8 @@ heatingMode.isFcstUsed: true/false - Using weather forecast to calculate heating
 let s = {
     heatingMode: { timePeriod: 24, heatingTime: 10, isFcstUsed: false }, // HEATING MODE. Different heating modes described above.
     elektrilevi: "VORK2",      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK4 /VORK5 / NONE
-    alwaysOnLowPrice: 10,       // Keep heating always ON if energy price + transmission lower than this value (EUR/MWh)
-    alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price + transmission higher than this value (EUR/MWh)
+    alwaysOnLowPrice: 1,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
+    alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
     isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
     relayID: 0,                 // Shelly relay ID
     defaultTimer: 60,           // Default timer duration, in minutes, for toggling the Shelly state.
@@ -100,7 +100,7 @@ let _ = {
     newSchedules: [],
     isSchedCreatedManually: false,
     existingSchedules: [],
-    version: 3.4,
+    version: 3.5,
 };
 let cntr = 0;
 
@@ -140,17 +140,17 @@ let virtualComponents = [
     },
     {
         type: "number", id: 201, config: {
-            name: "Heat On (energy+tariff)",
-            default_value: 10,
+            name: "Heat On (min price)",
+            default_value: 1,
             min: 0,
-            max: 300,
+            max: 100,
             persisted: true,
             meta: { ui: { view: "slider", unit: "€/MWh or less" } }
         }
     },
     {
         type: "number", id: 202, config: {
-            name: "Heat Off (energy+tariff)",
+            name: "Heat Off (max price)",
             default_value: 300,
             min: 0,
             max: 500,
@@ -670,17 +670,14 @@ function priceCalc(res, err, msg) {
     _.tsPrices = epoch();
     print(_.pId, "We got market prices from Elering ", new Date().toString());
 
-    //if heating is based only on the alwaysOnMaxPrice and alwaysOffMinPrice
+    //if heating is based only on the alwaysOnLowPrice 
     if (s.heatingMode.timePeriod <= 0) {
         for (let a = 0; a < eleringPrices.length; a++) {
-            if (eleringPrices[a][1] < s.alwaysOnLowPrice) {
+            let transferFee = calculateTransferFees(eleringPrices[a][0]);
+            if (eleringPrices[a][1] - transferFee < s.alwaysOnLowPrice) {
                 newScheds.push([new Date((eleringPrices[a][0]) * 1000).getHours(), eleringPrices[a][1], 0]);
-                print(_.pId, "Energy price + transfer fee " + eleringPrices[a][1] + " EUR/MWh at " + new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
+                print(_.pId, "Energy price ", eleringPrices[a][1] - transferFee, " EUR/MWh at ", new Date((eleringPrices[a][0]) * 1000).getHours() + ":00 is less than min price and used for heating.")
             }
-        }
-
-        if (!newScheds.length) {
-            print(_.pId, "No energy prices below min price level. No heating.")
         }
     }
 
@@ -704,16 +701,21 @@ function priceCalc(res, err, msg) {
         let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that period 
 
         for (let a = 0; a < sortedPeriod.length; a++) {
-            if ((a < heatingHours || sortedPeriod[a][1] < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] > s.alwaysOffHighPrice)) {
+            let transferFee = calculateTransferFees(sortedPeriod[a][0]);
+            if ((a < heatingHours || sortedPeriod[a][1] - transferFee < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] - transferFee > s.alwaysOffHighPrice)) {
                 newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
             }
 
             //If some hours are too expensive to use for heating, then just let user know for this
-            if (a < heatingHours && sortedPeriod[a][1] > s.alwaysOffHighPrice) {
-                print(_.pId, "Energy price + transfer fee " + sortedPeriod[a][1] + " EUR/MWh at " + new Date((sortedPeriod[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
+            if (a < heatingHours && sortedPeriod[a][1] - transferFee > s.alwaysOffHighPrice) {
+                print(_.pId, "Energy price ", sortedPeriod[a][1] - transferFee, " EUR/MWh at ", new Date((sortedPeriod[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
             }
         }
     }
+    if (!newScheds.length) {
+        print(_.pId, "Current configuration does not permit heating during any hours; it is likely that the alwaysOffHighPrice value is set too low.")
+    }
+
     //clearing memory
     eleringPrices = null;
     sortedPeriod = null;

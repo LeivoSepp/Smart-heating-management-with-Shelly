@@ -100,7 +100,7 @@ let _ = {
     newSchedules: [],
     isSchedCreatedManually: false,
     existingSchedules: [],
-    version: 3.5,
+    version: 3.6,
 };
 let cntr = 0;
 
@@ -187,8 +187,8 @@ let virtualComponents = [
         type: "number", id: 203, config: {
             name: "Forecast Impact +/-",
             default_value: 0,
-            min: -10,
-            max: 10,
+            min: -6,
+            max: 6,
             persisted: true,
             meta: { ui: { view: "slider", unit: "h more heat" } }
         }
@@ -617,7 +617,7 @@ function fcstCalc(res, err, msg) {
 
         // calculating heating hours
         const startTemp = 16;
-        let fcstHeatTime = ((startTemp - tempFcst) * (s.powerFactor - 1) + (startTemp - tempFcst + s.heatingCurve - 2));
+        let fcstHeatTime = ((startTemp - tempFcst) * (s.powerFactor - 1) + (startTemp - tempFcst + s.heatingCurve * 2 - 2));
         fcstHeatTime = fcstHeatTime < 0 || tempFcst > startTemp ? 0 : fcstHeatTime; //heating time can't be negative
         _.heatTime = Math.floor(fcstHeatTime / _.ctPeriods); //divide with periods and round-down heating duration
         _.heatTime = _.heatTime > s.heatingMode.timePeriod ? s.heatingMode.timePeriod : _.heatTime; //heating time can't be more than period

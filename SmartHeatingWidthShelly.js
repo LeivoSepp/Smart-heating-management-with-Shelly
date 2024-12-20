@@ -16,6 +16,11 @@ let VORK1 = { dayRate: 77, nightRate: 77, dayMaxRate: 77, holidayMaxRate: 77 };
 let VORK2 = { dayRate: 60, nightRate: 35, dayMaxRate: 60, holidayMaxRate: 35 };
 let VORK4 = { dayRate: 37, nightRate: 21, dayMaxRate: 37, holidayMaxRate: 21 };
 let VORK5 = { dayRate: 53, nightRate: 30, dayMaxRate: 82, holidayMaxRate: 47 };
+let Partner24 = { dayRate: 60, nightRate: 60, dayMaxRate: 60, holidayMaxRate: 60 };
+let Partner24Plus = { dayRate: 39, nightRate: 39, dayMaxRate: 39, holidayMaxRate: 39 };
+let Partner12 = { dayRate: 72, nightRate: 42, dayMaxRate: 72, holidayMaxRate: 42 };
+let Partner12Plus = { dayRate: 46, nightRate: 27, dayMaxRate: 46, holidayMaxRate: 27 };
+
 let NONE = { dayRate: 0, nightRate: 0, dayMaxRate: 0, holidayMaxRate: 0 };
 
 /****** PROGRAM INITIAL SETTINGS ******/
@@ -33,7 +38,7 @@ heatingMode.isFcstUsed: true/false - Using weather forecast to calculate heating
 */
 let s = {
     heatingMode: { timePeriod: 24, heatingTime: 10, isFcstUsed: false }, // HEATING MODE. Different heating modes described above.
-    elektrilevi: "VORK2",      // ELEKTRILEVI transmission fee: VORK1 / VORK2 / VORK4 /VORK5 / NONE
+    elektrilevi: "VORK2",      // ELEKTRILEVI/IMATRA transmission fee: VORK1 / VORK2 / VORK4 /VORK5 / Partner24 / Partner24Plus / Partner12 / Partner12Plus / NONE
     alwaysOnLowPrice: 1,       // Keep heating always ON if energy price lower than this value (EUR/MWh)
     alwaysOffHighPrice: 300,    // Keep heating always OFF if energy price higher than this value (EUR/MWh)
     isOutputInverted: false,    // Configures the relay state to either normal or inverted. (inverted required by Nibe, Thermia)
@@ -100,7 +105,9 @@ let _ = {
     newSchedules: [],
     isSchedCreatedManually: false,
     existingSchedules: [],
-    version: 3.6,
+    networkProvider: "None",
+    oldVersion: 0,
+    version: 3.7,
 };
 let cntr = 0;
 
@@ -131,11 +138,11 @@ let virtualComponents = [
     },
     {
         type: "enum", id: 201, config: {
-            name: "Elektrilevi Package",
-            options: ["NONE", "VORK1", "VORK2", "VORK4", "VORK5"],
+            name: "Network Package",
+            options: ["NONE", "VORK1", "VORK2", "VORK4", "VORK5", "Partner24", "Partner24Plus", "Partner12", "Partner12Plus"],
             default_value: "VORK2",
             persisted: true,
-            meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Basic", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak" } } }
+            meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Base", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak", "Partner24": "Partner24 Base", "Partner24Plus": "Partner24Plus Base", "Partner12": "Partner12 DayNight", "Partner12Plus": "Partner12Plus DayNight" } } }
         }
     },
     {
@@ -242,18 +249,18 @@ function processKVSData(res, err, msg, data) {
     //store scheduler IDs to memory
     _.existingSchedules = typeof kvsData["schedulerIDs" + _.sId] !== "undefined" && typeof JSON.parse(kvsData["schedulerIDs" + _.sId].value) === "object" ? JSON.parse(kvsData["schedulerIDs" + _.sId].value) : [];
     //old version number is used to maintain backward compatibility
-    const oldVersion = (kvsData["version" + _.sId] != null && typeof JSON.parse(kvsData["version" + _.sId].value) === "number") ? JSON.parse(kvsData["version" + _.sId].value) : 0;
+    _.oldVersion = (kvsData["version" + _.sId] != null && typeof JSON.parse(kvsData["version" + _.sId].value) === "number") ? JSON.parse(kvsData["version" + _.sId].value) : 0;
 
     if (isVirtualComponentsAvailable()) {
         let userConfig = [];
         //create an array from the user settings to delete them from KVS
         for (let i in s) userConfig.push(i + _.sId);
 
-        if (oldVersion <= 3.2) {
+        if (_.oldVersion <= 3.2) {
             print(_.pId, "New virtual component installation.");
             deleteAllKvs(userConfig);
             userConfig = null;
-        } else if (oldVersion === 3.3) {
+        } else if (_.oldVersion === 3.3) {
             print(_.pId, "Upgrading from KVS to Virtual components.");
             virtualComponents[1].config.default_value = JSON.stringify(JSON.parse(kvsData["heatingMode" + _.sId].value).timePeriod);
             virtualComponents[2].config.default_value = JSON.parse(kvsData["heatingMode" + _.sId].value).heatingTime;
@@ -281,7 +288,7 @@ function processKVSData(res, err, msg, data) {
                 //check if settings found in KVS
                 if (i == k + _.sId) {
                     if (k == "elektrilevi" || k == "country") {
-                        if (oldVersion >= 3.2) {
+                        if (_.oldVersion >= 3.2) {
                             s[k] = kvsData[i].value; //do not convert strings
                         } else {
                             break; //store new versions of elektrilevi and country values <- this part is for backward compatibility
@@ -301,9 +308,6 @@ function processKVSData(res, err, msg, data) {
                 userCongfigNotInKvs.push([k, s[k]]);
             }
         }
-        //convert the elektrilevi packet value to variable
-        s.elektrilevi = eval(s.elektrilevi);
-
         storeSettingsKvs(userCongfigNotInKvs);
         userCongfigNotInKvs = null;
     }
@@ -469,6 +473,15 @@ function setGroupConfig() {
 }
 
 function readAllVirtualComponents() {
+    
+    if (_.oldVersion < 3.7) {
+        Shelly.call("Enum.SetConfig", virtualComponents[3], function (result, error_code, error_message) {
+            if (error_code !== 0) {
+                print(_.pId, "Failed to set enum config. Error: " + error_message);
+            }
+        });
+    }
+
     Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, function (result, error_code, error_message) {
         if (error_code === 0) {
             if (result.components && result.components.length > 0) {
@@ -484,7 +497,7 @@ function readAllVirtualComponents() {
                             s.heatingMode.isFcstUsed = JSON.parse(result.components[i].status.value);
                             break;
                         case "enum:201":
-                            s.elektrilevi = eval(result.components[i].status.value);
+                            s.elektrilevi = result.components[i].status.value;
                             break;
                         case "number:201":
                             s.alwaysOnLowPrice = JSON.parse(result.components[i].status.value);
@@ -531,6 +544,15 @@ function main() {
         handleError("Shelly has no time.");
         return;
     }
+    if (s.elektrilevi.substring(0, 4) == "VORK") {
+        _.networkProvider = "Elektrilevi";
+    } else if (s.elektrilevi.substring(0, 4) == "Part") {
+        _.networkProvider = "Imatra";
+    }
+    print(_.pId, "Network provider: ", _.networkProvider, s.elektrilevi);
+    //convert the elektrilevi packet value to variable
+    s.elektrilevi = eval(s.elektrilevi);
+
     // Get Shelly timezone
     let tzInSec = getShellyTimezone();
 
@@ -750,6 +772,7 @@ function parseEleringPrices(body) {
         row[1] = Number(body.substring(activePos, body.indexOf("\"", activePos)).replace(",", "."));
         // Add transfer fees
         row[1] += calculateTransferFees(row[0]);
+
         eleringPrices.push(row);
         activePos = body.indexOf("\n", activePos);
     }
@@ -759,6 +782,15 @@ function parseEleringPrices(body) {
  * Calculate transfer fees based on the timestamp.
  */
 function calculateTransferFees(epoch) {
+    if (_.networkProvider === "Elektrilevi") {
+        return calculateElektrileviTransferFees(epoch);
+    } else if (_.networkProvider === "Imatra") {
+        return calculateImatraTransferFees(epoch);
+    } else {
+        return 0;
+    }
+}
+function calculateElektrileviTransferFees(epoch) {
     const hour = new Date(epoch * 1000).getHours();
     const day = new Date(epoch * 1000).getDay();
     const month = new Date(epoch * 1000).getMonth();
@@ -772,8 +804,32 @@ function calculateTransferFees(epoch) {
         //night-time: MO-FR at 22:00–07:00, SA-SU all day
         return s.elektrilevi.nightRate;
     } else {
-        //daytime> MO-FR at 07:00–22:00
+        //daytime: MO-FR at 07:00–22:00
         return s.elektrilevi.dayRate;
+    }
+}
+function isSummerTime() {
+    return getShellyTimezone() / 60 / 60 === 3;
+}
+function calculateImatraTransferFees(epoch) {
+    const hour = new Date(epoch * 1000).getHours();
+    const day = new Date(epoch * 1000).getDay();
+    if (isSummerTime()) {
+        if (hour < 8 || day === 6 || day === 0) {
+            //summer-night-time: MO-FR at 00:00–08:00, SA-SU all day
+            return s.elektrilevi.nightRate;
+        } else {
+            //daytime: MO-FR at 08:00–24:00
+            return s.elektrilevi.dayRate;
+        }
+    } else {
+        if (hour < 7 || hour >= 23 || day === 6 || day === 0) {
+            //winter-night-time: MO-FR at 23:00–07:00, SA-SU all day
+            return s.elektrilevi.nightRate;
+        } else {
+            //daytime> MO-FR at 07:00–23:00
+            return s.elektrilevi.dayRate;
+        }
     }
 }
 /*

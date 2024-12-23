@@ -16,11 +16,13 @@ function start(sId) {
             let v = [];
             v = JSON.parse(res.value);
             res = null;
-            delSc(v, data.sId);
+            delSc([v, data.sId]);
         }
     }, { sId: sId });
 }
-function delSc(si, sId) {
+function delSc(t) {
+    let si = t[0];
+    let sId = t[1];
     if (_.ct < 6 - _.mc) {
         for (let i = 0; i < _.mc && i < si.length; i++) {
             let id = si.splice(0, 1)[0];
@@ -35,18 +37,14 @@ function delSc(si, sId) {
             );
         }
     }
-    if (si.length > 0) { Timer.set(1000, false, function () { delSc(si, sId); }); } else {
+    if (si.length > 0) { Timer.set(1000, false, delSc, [si, sId]); 
+    } else {
         delKVS(sId);
     }
 }
 function delKVS(sId) {
     if (_.ct !== 0) {
-        Timer.set(
-            1000,
-            false,
-            function () {
-                delKVS(sId);
-            });
+        Timer.set(1000, false, delKVS, sId);
         return;
     }
     Shelly.call('KVS.Delete', { key: 'schedulerIDs' + sId });

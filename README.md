@@ -227,7 +227,7 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.com/collections/smart-monitoring-saving-energy).
 2. Connect the Shelly device to your personal WiFi network. Refer to the [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
-3. The firmware of Shelly Gen2 Plus devices must be version 1.0.0 or higher. The script is not compatible with firmware versions 0.14.* or older.
+3. The firmware of Shelly Gen2 Plus devices must be version 1.4.4 or higher. The KVS store is read only if the firmware version is 1.4.3 or older.
 4. The firmware of Shelly Gen2 Pro or Gen3 devices must be version 1.4.4 or higher. The script will not install Virtual Components if the firmware version is 1.4.3 or older.
 5. Open the Shelly device web page: Click Settings &rarr; Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open, on the left menu click "<> Scripts".
 6. Click the "Library" button (do not click "Create Script") &rarr; Configure URL &rarr; copy-paste and save the following link. By following this method, you can ensure that you will get the latest version of the script.  `https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json`

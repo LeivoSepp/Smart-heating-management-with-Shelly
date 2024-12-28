@@ -227,20 +227,19 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 
 1. Optain a Shelly Plus, Pro or Gen3 device [Shelly devices](https://www.shelly.com/collections/smart-monitoring-saving-energy).
 2. Connect the Shelly device to your personal WiFi network. Refer to the [Shelly web interface guides.](https://kb.shelly.cloud/knowledge-base/web-interface-guides)
-3. The Shelly firmware must be version 1.0.0 or higher. The script is not compatible with the firmware 0.14.* or older.
-4. Open the Shelly device web page: Click Settings &rarr; Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open, on the left menu click "<> Scripts".
-5. Click the "Library" button (do not click "Add Script") &rarr; Configure URL &rarr; copy-paste and save the following link. By following this method, you can ensure that you always have the latest version of the script.  `https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json`
+3. The firmware of Shelly Gen2 Plus devices must be version 1.0.0 or higher. The script is not compatible with firmware versions 0.14.* or older.
+4. The firmware of Shelly Gen2 Pro or Gen3 devices must be version 1.4.4 or higher. The script will not install Virtual Components if the firmware version is 1.4.3 or older.
+5. Open the Shelly device web page: Click Settings &rarr; Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open, on the left menu click "<> Scripts".
+6. Click the "Library" button (do not click "Create Script") &rarr; Configure URL &rarr; copy-paste and save the following link. By following this method, you can ensure that you will get the latest version of the script.  `https://raw.githubusercontent.com/LeivoSepp/Smart-heating-management-with-Shelly/master/manifest.json`
+7. Click "Import code". 
 
 <img src="images/insertcode.jpg" alt="Insert code" width="750">
 
-6. Configure Initial Parameters:
-    - Set heating mode based on your requirements.
-    - Set the Elektrilevi or Imatra network package.
-    - Set the output relay mode: normal or inverted. 
-    - Set the price when the heating is always on.
-    - Set the highest price when the heating will never turn on.
-7. Name the script, for instance, "Heating 24h-Forecast," and save. However, avoid immediately clicking "Start" to prevent potential issues with Shelly that may occur if you initiate the start process too quickly.
-8. Initiate Start once the saving process is complete.
+8. Name the script, for instance, "Heating 24h-Forecast", and save. 
+9. Click "Start" once the saving process is complete.
+10. Configuring Script parameters
+    - [Using Shelly App](#using-shelly-app)
+    - [Using Shelly KVS](#using-shelly-kvs)
 
 ## Updating Script
 
@@ -253,7 +252,7 @@ Electricity prices can fluctuate significantly, sometimes varying up to 100 time
 5. Select all script code and delete it **Ctrl+A** &rarr; **Delete**. 
 6. Paste the code from the clipboard to the script window **Ctrl+V**.
 7. Save the script, the version is now updated. 
-
+8. All configurations remain unchanged, as they are stored in KVS or Virtual Components.
 
 ## How to Verify Script Execution
 
@@ -344,12 +343,16 @@ The script saves data in Shelly KVS (Key-Value-Storage) to preserve it in case o
 
 To access the stored data on the Shelly device web page, navigate to **Advanced &rarr; KVS**.
 
-1. Key: ``schedulerIDs1`` Value: ``[12,13,14,15,16,17,18,19,23,24]``
+1. Key: ``schedulerIDs1`` Value: ``[1,2,3,4,5,6,7]``
    
     The numeric values represent schedule ID numbers created by the script. This information is crucial for each script to identify and manage schedules associated with it. It aids in the proper deletion of outdated schedules when creating new ones is necessary.
 
-2. Key: ``timestamp1`` Value: ``Wed Jan 3 2024 21:13:24 GMT+0200`` 
+2. Key: ``lastcalculation1`` Value: ``Fri Dec 27 2024 23:29:20 GMT+0200`` 
    
    This timestamp indicates the time when the script successfully retrieved market prices from Elering and created schedules. While this information is primarily for your reference, it offers insights into the timeline of script activities.
+
+3. Key: ``version1`` Value: ``3.8`` 
+   
+   The version indicates the installed script version.
 
 <img src="images/kvs.jpg" alt="Key Value Storage" width="750">

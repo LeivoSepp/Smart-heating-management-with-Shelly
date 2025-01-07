@@ -24,6 +24,8 @@
   - [Message "Id3: #1 Scheduler at: 12:00 price: 185.91 EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit."](#message-id3-1-scheduler-at-1200-price-18591-eurmwh-energy-price--transmission-failed-20-schedulers-is-the-shelly-limit)
   - [Error "Couldn't get script"](#error-couldnt-get-script)
   - [Advanced → Key Value Storage → Script Data](#advanced--key-value-storage--script-data)
+- [License](#license)
+- [Author](#author)
 
 ## Script Overview
 This Shelly script is designed to optimize heating activation by leveraging energy market prices from Elering, ensuring heating operates during the most cost-effective hours using various algorithms.
@@ -356,3 +358,14 @@ To access the stored data on the Shelly device web page, navigate to **Advanced 
    The version indicates the installed script version.
 
 <img src="images/kvs.jpg" alt="Key Value Storage" width="750">
+
+
+# License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+# Author
+
+Created by Leivo Sepp, 07.01.2025
+
+[GitHub Repository](https://github.com/LeivoSepp/Shelly-Live-Tariff)

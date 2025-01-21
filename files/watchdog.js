@@ -1,53 +1,28 @@
 //This is a watchdog reference code
-let _ = {
-    sId: 0,
-    mc: 3,
-    ct: 0,
-};
+let scId = 0;
 Shelly.addStatusHandler(function (status) {
     if (status.name === 'script' && !status.delta.running) {
-        _.sId = status.delta.id;
-        start(_.sId);
+        scId = status.delta.id;
+        start();
     }
 });
-function start(sId) {
-    Shelly.call('KVS.Get', { key: 'schedulerIDs' + sId }, function (res, err, msg, data) {
+function start() {
+    Shelly.call('KVS.Get', { key: 'schedulerIDs' + scId }, function (res, err, msg, data) {
         if (res) {
-            let v = [];
-            v = JSON.parse(res.value);
-            res = null;
-            delSc([v, data.sId]);
+            delSc(JSON.parse(res.value));
         }
-    }, { sId: sId });
+    });
 }
-function delSc(t) {
-    let si = t[0];
-    let sId = t[1];
-    if (_.ct < 6 - _.mc) {
-        for (let i = 0; i < _.mc && i < si.length; i++) {
-            let id = si.splice(0, 1)[0];
-            _.ct++;
-            Shelly.call('Schedule.Delete', { id: id },
-                function (res, err, msg, data) {
-                    if (err !== 0) { print('Script #' + sId, 'schedule ', data.id, ' del FAIL.'); }
-                    else { print('Script #' + sId, 'schedule ', data.id, ' del OK.'); }
-                    _.ct--;
-                },
-                { id: id }
-            );
-        }
-    }
-    if (si.length > 0) { Timer.set(1000, false, delSc, [si, sId]); 
-    } else {
-        delKVS(sId);
-    }
+function delSc(id) {
+    Shelly.call("Schedule.Delete", { id: id },
+        function (res, err, msg, data) {
+            if (err !== 0) { print('Script #' + scId, 'schedule ', data.id, ' deletion by watchdog failed.'); }
+            else { print('Script #' + scId, 'schedule ', data.id, ' deleted by watchdog.'); }
+            delKVS();
+        }, { id: id }
+    );
 }
-function delKVS(sId) {
-    if (_.ct !== 0) {
-        Timer.set(1000, false, delKVS, sId);
-        return;
-    }
-    Shelly.call('KVS.Delete', { key: 'schedulerIDs' + sId });
-    print('Heating script #' + sId, 'is clean');
+function delKVS() {
+    Shelly.call('KVS.Delete', { key: 'schedulerIDs' + scId });
 }
 

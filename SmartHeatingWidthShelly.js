@@ -1,4 +1,8 @@
 /*
+Created by Leivo Sepp, 2024-2025
+Licensed under the MIT License
+https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
+
 This Shelly script is designed to retrieve energy market prices from Elering and
 activate heating during the most cost-effective hours each day, employing various algorithms. 
 
@@ -6,25 +10,21 @@ activate heating during the most cost-effective hours each day, employing variou
 2. Division of heating into time periods, with activation during the cheapest hour within each period.
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 The script executes daily after 23:00 to establish heating timeslots for the following day.
-
-created by Leivo Sepp, 17.12.2024
-https://github.com/LeivoSepp/Smart-heating-management-with-Shelly
 */
 
 /* Electricity transmission fees (EUR/MWh)
 Elektrilevi https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu 
-Imatra https://www.imatraelekter.ee/eraklient/vorgupaketid 
+Imatra https://imatraelekter.ee/vorguteenus/vorguteenuse-hinnakirjad/
 */
-let VORK1 = { dayRate: 77, nightRate: 77, dayMaxRate: 77, holidayMaxRate: 77 };
-let VORK2 = { dayRate: 60, nightRate: 35, dayMaxRate: 60, holidayMaxRate: 35 };
-let VORK4 = { dayRate: 37, nightRate: 21, dayMaxRate: 37, holidayMaxRate: 21 };
-let VORK5 = { dayRate: 53, nightRate: 30, dayMaxRate: 82, holidayMaxRate: 47 };
-let Partner24 = { dayRate: 60, nightRate: 60, dayMaxRate: 60, holidayMaxRate: 60 };
-let Partner24Plus = { dayRate: 39, nightRate: 39, dayMaxRate: 39, holidayMaxRate: 39 };
-let Partner12 = { dayRate: 72, nightRate: 42, dayMaxRate: 72, holidayMaxRate: 42 };
-let Partner12Plus = { dayRate: 46, nightRate: 27, dayMaxRate: 46, holidayMaxRate: 27 };
-
-let NONE = { dayRate: 0, nightRate: 0, dayMaxRate: 0, holidayMaxRate: 0 };
+const VORK1 = { dayRate: 77.2, nightRate: 77.2, dayMaxRate: 77.2, holidayMaxRate: 77.2 };
+const VORK2 = { dayRate: 60.7, nightRate: 35.1, dayMaxRate: 60.7, holidayMaxRate: 35.1 };
+const VORK4 = { dayRate: 36.9, nightRate: 21, dayMaxRate: 36.9, holidayMaxRate: 21 };
+const VORK5 = { dayRate: 52.9, nightRate: 30.3, dayMaxRate: 81.8, holidayMaxRate: 47.4 };
+const Partner24 = { dayRate: 60.7, nightRate: 60.7, dayMaxRate: 60.7, holidayMaxRate: 60.7 };
+const Partner24Plus = { dayRate: 38.6, nightRate: 38.6, dayMaxRate: 38.6, holidayMaxRate: 38.6 };
+const Partner12 = { dayRate: 72.4, nightRate: 42, dayMaxRate: 72.4, holidayMaxRate: 42 };
+const Partner12Plus = { dayRate: 46.4, nightRate: 27.1, dayMaxRate: 46.4, holidayMaxRate: 27.1 };
+const NONE = { dayRate: 0, nightRate: 0, dayMaxRate: 0, holidayMaxRate: 0 };
 
 /****** PROGRAM INITIAL SETTINGS ******/
 /* 
@@ -101,18 +101,18 @@ let _ = {
     sId: Shelly.getCurrentScriptId(),
     pId: "Id" + Shelly.getCurrentScriptId() + ": ",
     rpcCl: 1,
-    rpcBlock: 1,
-    schedId: [],
+    rpcBlock: 2, //block createSchedule and createWatchdog functions
+    schedId: '',
     newSchedules: [],
     isSchedCreatedManually: false,
-    existingSchedules: [],
+    existingSchedules: '',
     networkProvider: "None",
     oldVersion: 0,
-    version: 3.8,
+    version: 3.9,
 };
 let cntr = 0;
 
-let virtualComponents = [
+const virtualComponents = [
     {
         type: "group", id: 200, config: {
             name: "Smart Heating"
@@ -132,7 +132,7 @@ let virtualComponents = [
             name: "Heating Time (h/period)",
             default_value: 10,
             min: 0,
-            max: 20,
+            max: 24,
             persisted: true,
             meta: { ui: { view: "slider", unit: "h/period" } }
         }
@@ -207,6 +207,7 @@ function start() {
     setAutoStart();
     setKvsScrLibr();
     getKvsData();
+    createSchedule();
 }
 /* set the script to sart automatically on boot */
 function setAutoStart() {
@@ -250,8 +251,8 @@ function processKVSData(res, err, msg, data) {
         kvsData = res.items;
         res = null;
     }
-    //store scheduler IDs to memory
-    _.existingSchedules = typeof kvsData["schedulerIDs" + _.sId] !== "undefined" && typeof JSON.parse(kvsData["schedulerIDs" + _.sId].value) === "object" ? JSON.parse(kvsData["schedulerIDs" + _.sId].value) : [];
+    //store scheduler ID to memory
+    _.existingSchedules = typeof kvsData["schedulerIDs" + _.sId] !== "undefined" && typeof JSON.parse(kvsData["schedulerIDs" + _.sId].value) === "number" ? JSON.parse(kvsData["schedulerIDs" + _.sId].value) : '';
     //old version number is used to maintain backward compatibility
     _.oldVersion = (kvsData["version" + _.sId] != null && typeof JSON.parse(kvsData["version" + _.sId].value) === "number") ? JSON.parse(kvsData["version" + _.sId].value) : 0;
 
@@ -320,8 +321,8 @@ function storeSettingsKvs(userCongfigNotInKvs) {
             let key = userCongfigNotInKvs.splice(0, 1)[0][0] + _.sId;
             cntr++;
             Shelly.call("KVS.set", { key: key, value: value },
-                function (res, error_code, error_message, data) {
-                    if (error_code !== 0) {
+                function (res, err, msg, data) {
+                    if (err !== 0) {
                         console.log(_.pId, "Store settings", data.key, data.value, "in KVS failed.");
                     } else {
                         console.log(_.pId, "Store settings", data.key, data.value, "to KVS is OK");
@@ -346,11 +347,11 @@ function deleteAllKvs(userConfig) {
             let key = userConfig.splice(0, 1)[0];
             cntr++;
             Shelly.call("KVS.Delete", { key: key },
-                function (res, error_code, error_message, data) {
-                    if (error_code === 0) {
+                function (res, err, msg, data) {
+                    if (err === 0) {
                         console.log(_.pId, "Deleted " + data.key + " from KVS store");
                     } else {
-                        console.log(_.pId, "Failed to delete " + data.key + " from KVS store. Error: " + error_message);
+                        console.log(_.pId, "Failed to delete " + data.key + " from KVS store. Error: " + msg);
                     }
                     cntr--;
                 },
@@ -367,17 +368,18 @@ function deleteAllKvs(userConfig) {
 
 // Function to get all virtual components and delete them all before creating new
 function getAllVirtualComponents() {
-    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, function (result, error_code, error_message) {
-        if (error_code === 0) {
-            if (result.components && result.components.length > 0) {
-                deleteVirtualComponents(result.components);
-            } else {
-                addVirtualComponent(virtualComponents);
-            }
+    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, checkComponents);
+}
+function checkComponents(res, err, msg, data) {
+    if (err === 0) {
+        if (res.components && res.components.length > 0) {
+            deleteVirtualComponents(res.components);
         } else {
-            console.log(_.pId, "Failed to get virtual components. Error: " + error_message);
+            addVirtualComponent(virtualComponents);
         }
-    });
+    } else {
+        console.log(_.pId, "Failed to get virtual components. Error: " + msg);
+    }
 }
 // Function to delete all virtual components
 function deleteVirtualComponents(vComponents) {
@@ -386,11 +388,11 @@ function deleteVirtualComponents(vComponents) {
             let key = vComponents.splice(0, 1)[0].key;
             cntr++;
             Shelly.call("Virtual.Delete", { key: key },
-                function (res, error_code, error_message, data) {
-                    if (error_code === 0) {
+                function (res, err, msg, data) {
+                    if (err === 0) {
                         console.log(_.pId, "Deleted " + data.key + " virtual component");
                     } else {
-                        console.log(_.pId, "Failed to delete " + data.key + " virtual component. Error: " + error_message);
+                        console.log(_.pId, "Failed to delete " + data.key + " virtual component. Error: " + msg);
                     }
                     cntr--;
                 },
@@ -415,11 +417,11 @@ function addVirtualComponent(virtualComponents) {
             let config = component.config;
             cntr++;
             Shelly.call("Virtual.Add", { type: type, id: id, config: config },
-                function (res, error_code, error_message, data) {
-                    if (error_code === 0) {
+                function (res, err, msg, data) {
+                    if (err === 0) {
                         console.log(_.pId, "Added virtual component: " + data.type + ":" + data.id);
                     } else {
-                        console.log(_.pId, "Failed to add virtual component: " + data.type + ":" + data.id + ". Error: " + error_message);
+                        console.log(_.pId, "Failed to add virtual component: " + data.type + ":" + data.id + ". Error: " + msg);
                     }
                     cntr--;
                 },
@@ -434,6 +436,7 @@ function addVirtualComponent(virtualComponents) {
     }
 }
 
+// add virtual components to group
 function setGroupConfig() {
     const groupConfig = {
         id: 200,
@@ -449,73 +452,72 @@ function setGroupConfig() {
             "enum:202"
         ]
     };
-    Shelly.call("Group.Set", groupConfig, function (result, error_code, error_message) {
-        if (error_code !== 0) {
-            console.log(_.pId, "Failed to set group config. Error: " + error_message);
+    Shelly.call("Group.Set", groupConfig, function (res, err, msg, data) {
+        if (err !== 0) {
+            console.log(_.pId, "Failed to set group config. Error: " + msg);
         }
     });
     readAllVirtualComponents();
 }
 
 function readAllVirtualComponents() {
-
     //this is for adding Imatra packages during the upgrade to 3.7
     if (_.oldVersion < 3.7 && _.oldVersion >= 3.4) {
-        Shelly.call("Enum.SetConfig", virtualComponents[3], function (result, error_code, error_message) {
-            if (error_code !== 0) {
-                console.log(_.pId, "Failed to set enum config. Error: " + error_message);
+        Shelly.call("Enum.SetConfig", virtualComponents[3], function (res, err, msg, data) {
+            if (err !== 0) {
+                console.log(_.pId, "Failed to set enum config. Error: " + msg);
             }
         });
     }
     //this function reads all virtual components and stores the values to memory
-    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, function (result, error_code, error_message) {
-        if (error_code === 0) {
-            const components = result.components;
-            result = null;
-            if (components && components.length > 0) {
-                for (let i in components) {
-                    switch (components[i].key) {
-                        case "enum:200":
-                            s.heatingMode.timePeriod = JSON.parse(components[i].status.value);
-                            break;
-                        case "number:200":
-                            s.heatingMode.heatingTime = JSON.parse(components[i].status.value);
-                            break;
-                        case "boolean:200":
-                            s.heatingMode.isFcstUsed = JSON.parse(components[i].status.value);
-                            break;
-                        case "enum:201":
-                            s.elektrilevi = components[i].status.value;
-                            break;
-                        case "number:201":
-                            s.alwaysOnLowPrice = JSON.parse(components[i].status.value);
-                            break;
-                        case "number:202":
-                            s.alwaysOffHighPrice = JSON.parse(components[i].status.value);
-                            break;
-                        case "boolean:201":
-                            s.isOutputInverted = JSON.parse(components[i].status.value);
-                            break;
-                        case "enum:202":
-                            s.country = components[i].status.value;
-                            break;
-                        case "number:203":
-                            s.heatingCurve = JSON.parse(components[i].status.value);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                waitForRpcCalls(main);
-            } else {
-                console.log(_.pId, "No virtual components found.");
-            }
-        } else {
-            console.log(_.pId, "Failed to get virtual components. Error: " + error_message);
-        }
-    });
+    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, processComponents);
 }
-
+function processComponents(res, err, msg, data) {
+    if (err === 0) {
+        const components = res.components;
+        res = null;
+        if (components && components.length > 0) {
+            for (let i in components) {
+                switch (components[i].key) {
+                    case "enum:200":
+                        s.heatingMode.timePeriod = JSON.parse(components[i].status.value);
+                        break;
+                    case "number:200":
+                        s.heatingMode.heatingTime = JSON.parse(components[i].status.value);
+                        break;
+                    case "boolean:200":
+                        s.heatingMode.isFcstUsed = JSON.parse(components[i].status.value);
+                        break;
+                    case "enum:201":
+                        s.elektrilevi = components[i].status.value;
+                        break;
+                    case "number:201":
+                        s.alwaysOnLowPrice = JSON.parse(components[i].status.value);
+                        break;
+                    case "number:202":
+                        s.alwaysOffHighPrice = JSON.parse(components[i].status.value);
+                        break;
+                    case "boolean:201":
+                        s.isOutputInverted = JSON.parse(components[i].status.value);
+                        break;
+                    case "enum:202":
+                        s.country = components[i].status.value;
+                        break;
+                    case "number:203":
+                        s.heatingCurve = JSON.parse(components[i].status.value);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            waitForRpcCalls(main);
+        } else {
+            console.log(_.pId, "No virtual components found.");
+        }
+    } else {
+        console.log(_.pId, "Failed to get virtual components. Error: " + msg);
+    }
+}
 /**
 This is the main script where all the logic starts.
 */
@@ -640,7 +642,7 @@ Creating time periods etc.
 */
 function priceCalc(res, err, msg) {
     if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
-        handleError("Elering JSON error, check again in " + _.loopFreq / 60 + " min.");
+        handleError("Elering HTTP.GET, check again in " + _.loopFreq / 60 + " min.");
         return;
     }
     //convert the elektrilevi packet value to variable
@@ -652,7 +654,7 @@ function priceCalc(res, err, msg) {
     res = null; //clear memory
     const eleringPrices = parseEleringPrices(csvData);
     //if elering API returns less than 23 rows, the script will try to download the data again after set of minutes
-    if (eleringPrices.length < 23) {
+    if (eleringPrices.length < 24) {
         handleError("Elering API didn't return prices, check again in " + _.loopFreq / 60 + " min.");
         return;
     }
@@ -661,16 +663,15 @@ function priceCalc(res, err, msg) {
     console.log(_.pId, "We got market prices from Elering ", new Date().toString());
 
     //calculate schedules
-    let newScheds = [];
+    _.newSchedules = [];
     if (s.heatingMode.timePeriod <= 0) {
-        newScheds = calculateAlwaysOnLowPriceSchedules(eleringPrices);
+        _.newSchedules = calculateAlwaysOnLowPriceSchedules(eleringPrices);
     } else {
-        newScheds = calculateHeatingPeriods(eleringPrices);
+        _.newSchedules = calculateHeatingPeriods(eleringPrices);
     }
-    _.newSchedules = sort(newScheds, 0);
     _.isSchedCreatedManually = false;
     setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
-    delSc(_.existingSchedules);
+    deleteSchedule();
 }
 /**
  * Parse Elering prices from the response body.
@@ -709,7 +710,7 @@ function calculateAlwaysOnLowPriceSchedules(eleringPrices) {
     for (let a = 0; a < eleringPrices.length; a++) {
         let transferFee = calculateTransferFees(eleringPrices[a][0]);
         if (eleringPrices[a][1] - transferFee < s.alwaysOnLowPrice) {
-            newScheds.push([new Date(eleringPrices[a][0] * 1000).getHours(), eleringPrices[a][1], 0]);
+            newScheds.push([new Date(eleringPrices[a][0] * 1000).getHours(), eleringPrices[a][1]]);
             console.log(_.pId, "Energy price ", eleringPrices[a][1] - transferFee, " EUR/MWh at ", new Date(eleringPrices[a][0] * 1000).getHours() + ":00 is less than min price and used for heating.");
         }
     }
@@ -744,7 +745,7 @@ function calculateHeatingPeriods(eleringPrices) {
         for (let a = 0; a < sortedPeriod.length; a++) {
             let transferFee = calculateTransferFees(sortedPeriod[a][0]);
             if ((a < heatingHours || sortedPeriod[a][1] - transferFee < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] - transferFee > s.alwaysOffHighPrice)) {
-                newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1], i + 1]);
+                newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1]]);
             }
 
             //If some hours are too expensive to use for heating, then just let user know for this
@@ -812,112 +813,70 @@ function calculateImatraTransferFees(epoch) {
         }
     }
 }
-/*
-delete all the old schedulers created by this script. 
-*/
-function delSc(s) {
-    if (cntr < 6 - _.rpcCl) {
-        for (let i = 0; i < _.rpcCl && i < s.length; i++) {
-            let id = s.splice(0, 1)[0];
-            cntr++;
-            Shelly.call("Schedule.Delete", { id: id },
-                function (res, err, msg, data) {
-                    if (err !== 0) {
-                        console.log(_.pId, "Schedule ", data.id, " delete FAILED.");
-                    } else {
-                        console.log(_.pId, "Schedule ", data.id, " delete SUCCEEDED.");
-                    }
-                    cntr--;
-                },
-                { id: id }
-            );
+/**
+Set countdown timer to flip Shelly status
+ */
+function setShellyTimer(isOutInv, timerMin) {
+    const is_on = isOutInv ? "on" : "off";
+    const timerSec = timerMin * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
+    Shelly.call("Switch.SetConfig", {
+        id: s.relayID,
+        config: {
+            auto_on: isOutInv,
+            auto_on_delay: timerSec,
+            auto_off: !isOutInv,
+            auto_off_delay: timerSec
         }
+    });
+}
+// delete the schedule if it exists
+function deleteSchedule() {
+    const id = _.existingSchedules;
+    if (id !== "") {
+        Shelly.call("Schedule.Delete", { id: id });
     }
-    //if there are more calls in the queue
-    if (s.length > 0) {
-        Timer.set(1000, false, delSc, s);
-    } else {
-        // create schedulers
-        waitForRpcCalls([getAllScheds, _.newSchedules]);
-        _.newSchedules = null; //clear memory
-    }
+    _.rpcBlock = 1; //release block for createSchedule
 }
 
-/**
-Get all the existing schedulers to check duplications
- */
-function getAllScheds(newScheds) {
-    Shelly.call("Schedule.List", {},
-        function (res, err, msg, data) {
-            if (res === 0) {
-                // No existing schedulers found
-                createScheds([[], data.s]);
-            } else {
-                // Found existing schedulers
-                createScheds([res.jobs, data.s]);
-            }
-        }, { s: newScheds }
-    );
-}
-
-/**
-Create all schedulers, the Shelly limit is 20.
- */
-function createScheds(schedules) {
-    const listScheds = schedules[0];
-    let newScheds = schedules[1];
-    //logic below is a non-blocking method for RPC calls to create all schedulers one by one
-    if (cntr < 6 - _.rpcCl) {
-        for (let i = 0; i < _.rpcCl && i < newScheds.length; i++) {
-            let isExist = false;
-            let hour = newScheds[0][0];
-            let ctPeriod = newScheds[0][2];
-            let price = newScheds.splice(0, 1)[0][1]; //cut the array one-by-one
-            let timespec = "0 0 " + hour + " * * *";
-            //looping through existing schedulers
-            for (let k = 0; k < listScheds.length; k++) {
-                let t = listScheds[k].timespec;
-                let p = listScheds[k].calls[0].params;
-                //check if the scheduler exist 
-                if (p.id === s.relayID && t.split(" ").join("") === timespec.split(" ").join("")) {
-                    console.log(_.pId, "#" + ctPeriod, "Skipping scheduler at: ", hour + ":00 for relay:", s.relayID, " as it is already exist.");
-                    isExist = true;
-                    break;
-                }
-            }
-            // only create unique schedulers
-            if (!isExist) {
-                cntr++;
-                Shelly.call("Schedule.Create", {
-                    enable: true, timespec: timespec,
-                    calls: [{
-                        method: "Switch.Set",
-                        params: {
-                            id: s.relayID,
-                            on: !s.isOutputInverted
-                        }
-                    }]
-                },
-                    function (res, err, msg, data) {
-                        if (err !== 0) {
-                            console.log(_.pId, "#" + data.ctPeriod, "Scheduler at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit.");
-                        } else {
-                            console.log(_.pId, "#" + data.ctPeriod, "Scheduler starts at: ", data.hour + ":00 price: ", data.price, " EUR/MWh (energy price + transmission). ID:", res.id, " SUCCESS");
-                            _.schedId.push(res.id); //create an array of scheduleIDs
-                        }
-                        cntr--;
-                    },
-                    { hour: hour, price: price, ctPeriod: ctPeriod }
-                );
-            }
-        }
+// Create a new schedule with the advanced timespec to cover all the hours within the same schedule item
+function createSchedule() {
+    //waiting RPC calls to be completed
+    if (_.rpcBlock !== 1) {
+        Timer.set(500, false, createSchedule);
+        return;
     }
+    let sortedSched = sort(_.newSchedules, 0);
+    _.schedId = null;
+    let hoursArr = [];
+    let hourPricesArr = [];
+    for (let i = 0; i < sortedSched.length; i++) {
+        let hr = sortedSched[i][0];
+        hoursArr.push(hr);
+        let t = hr < 10 ? "0" + hr : hr;
+        hourPricesArr.push(t + ":00 (" + sortedSched[i][1] + ")");
+    }
+    const hours = hoursArr.join(","); //create timespec
+    const prices = hourPricesArr.join(", "); //create hours (prices) only for console.log
 
-    //if there are more calls in the queue
-    if (newScheds.length > 0) {
-        Timer.set(1000, false, createScheds, [listScheds, newScheds]);
+    Shelly.call("Schedule.Create", {
+        enable: true,
+        timespec: "0 0 " + hours + " * * *",
+        calls: [{
+            method: "Switch.Set",
+            params: {
+                id: s.relayID,
+                on: !s.isOutputInverted
+            }
+        }]
+    }, processSchedule, { hours: hours, prices: prices });
+}
+function processSchedule(res, err, msg, data) {
+    if (err !== 0) {
+        console.log(_.pId, "Scheduler for hours: ", data.hours, " FAILED.");
     } else {
-        waitForRpcCalls(setKVS);
+        console.log(_.pId, "Heating will be turned on to following hours 'HH:mm (EUR/MWh Energy Price + Transmission)': ", data.prices);
+        _.schedId = res.id; //last scheduleID
+        setKVS();
     }
 }
 
@@ -930,29 +889,10 @@ function setKVS() {
     Shelly.call("KVS.set", { key: "lastcalculation" + _.sId, value: new Date().toString() });
     Shelly.call("KVS.set", { key: "schedulerIDs" + _.sId, value: JSON.stringify(_.schedId) },
         function () {
-            console.log(_.pId, "Script v", _.version, " created all the schedules, next heating calculation at", nextChkHr(1) + (_.updtDelay < 10 ? ":0" : ":") + _.updtDelay);
-            _.rpcBlock--; //release RPC calls for watchdog
-            _.loopRunning = false;
+            console.log(_.pId, "Script v", _.version, " created a schedule with ID:" + _.schedId + ", next heating calculation at", nextChkHr(1) + (_.updtDelay < 10 ? ":0" : ":") + _.updtDelay);
+            _.rpcBlock = 0; //release RPCcalls for watchdog
+            createWatchdog();
         });
-    _.schedId = [];
-}
-
-/**
-Set countdown timer to flip Shelly status
- */
-function setShellyTimer(isOutInv, timerMin) {
-    const is_on = isOutInv ? "on" : "off";
-    const timerSec = timerMin * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
-    console.log(_.pId, "Set Shelly auto " + is_on + " timer for ", timerMin, " minutes.");
-    Shelly.call("Switch.SetConfig", {
-        id: s.relayID,
-        config: {
-            auto_on: isOutInv,
-            auto_on_delay: timerSec,
-            auto_off: !isOutInv,
-            auto_off_delay: timerSec
-        }
-    });
 }
 
 //if the internet is not working or Elering is down
@@ -961,19 +901,17 @@ function setShellyManualMode() {
         return;
     }
     _.isSchedCreatedManually = true;
-    setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
 
     // create schedules for the historical cheap hours manually
-    // allow heating only outside of peak periods 0-8, 12-15, 20-23
-    let newScheds = [];
-    const cheapHoursDay = [0, 12, 1, 13, 2, 14, 3, 15, 4, 20, 5, 21, 6, 22, 7, 23, 8];
-    const heatingHours = s.heatingMode.heatingTime * _.ctPeriods <= 17 ? s.heatingMode.heatingTime * _.ctPeriods : 17; //finds max hours to heat in 24h period 
+    const cheapHoursDay = [0, 1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 12, 13, 14, 15, 7, 8, 9, 10, 11, 16, 17, 18, 19];
+    const heatingHours = s.heatingMode.heatingTime * _.ctPeriods <= 24 ? s.heatingMode.heatingTime * _.ctPeriods : 24; //finds max hours to heat in 24h period 
 
+    _.newSchedules = [];
     for (let i = 0; i < heatingHours; i++) {
-        newScheds.push([cheapHoursDay[i], "no prices", 1]);
+        _.newSchedules.push([cheapHoursDay[i], "no price"]);
     }
-    _.newSchedules = sort(newScheds, 0);
-    delSc(_.existingSchedules);
+    setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
+    deleteSchedule();
 }
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
@@ -1078,6 +1016,9 @@ function loop() {
 
 let isShellyTimeOk = false;
 let timer_handle;
+let time_counter = 0;
+let loopNotStarted = true;
+
 function checkShellyTime() {
     //check Shelly time
     const shEpochUtc = Shelly.getComponentStatus("sys").unixtime;
@@ -1085,43 +1026,42 @@ function checkShellyTime() {
         //if time is OK, then stop the timer
         Timer.clear(timer_handle);
         isShellyTimeOk = true;
+        loop(); //start the loop
     } else {
+        time_counter++;
+        print("Shelly has no time", time_counter, "seconds. We wait for the time to be set.");
+        if (time_counter > 30 && loopNotStarted) {
+            loop(); //start the loop with no time
+            loopNotStarted = false;
+        }
         //waiting timeserver response
         return;
     }
 }
-//execute the checkShellyTime when the script starts
-checkShellyTime();
-//start 1 sec loop-timer to check Shelly time 
-//if Shelly has already time, then this timer will be closed immediately
-timer_handle = Timer.set(1000, true, checkShellyTime);
-
-//start the loop component
-Timer.set(_.loopFreq * 1000, true, loop);
-
 
 /*  ---------  WATCHDOG START  ---------   */
 /** find watchdog script ID */
 function createWatchdog() {
     //waiting other RPC calls to be completed
     if (_.rpcBlock !== 0) {
-        Timer.set(1000, false, createWatchdog);
+        Timer.set(500, false, createWatchdog);
         return;
     }
-    Shelly.call('Script.List', null, function (res, err, msg, data) {
-        if (res) {
-            let wdId = 0;
-            const s = res.scripts;
-            res = null;
-            for (let i = 0; i < s.length; i++) {
-                if (s[i].name === "watchdog") {
-                    wdId = s[i].id;
-                    break;
-                }
+    Shelly.call('Script.List', null, scriptList);
+}
+function scriptList(res, err, msg, data) {
+    if (res) {
+        let wdId = 0;
+        const s = res.scripts;
+        res = null;
+        for (let i = 0; i < s.length; i++) {
+            if (s[i].name === "watchdog") {
+                wdId = s[i].id;
+                break;
             }
-            createScript(wdId);
         }
-    });
+        createScript(wdId);
+    }
 }
 /** Create a new script (id==0) or stop the existing script (id<>0) if watchdog found. */
 function createScript(id) {
@@ -1134,7 +1074,7 @@ function createScript(id) {
 /** Add code to the watchdog script */
 function putCode(res, err, msg, data) {
     if (err === 0) {
-        const watchdog = 'let _={sId:0,mc:3,ct:0};function start(e){Shelly.call("KVS.Get",{key:"schedulerIDs"+e},(function(e,l,t,c){if(e){let l=[];l=JSON.parse(e.value),e=null,delSc([l,c.sId])}}),{sId:e})}function delSc(e){let l=e[0],t=e[1];if(_.ct<6-_.mc)for(let e=0;e<_.mc&&e<l.length;e++){let e=l.splice(0,1)[0];_.ct++,Shelly.call("Schedule.Delete",{id:e},(function(e,l,c,d){0!==l?print("Script #"+t,"schedule ",d.id," del FAIL."):print("Script #"+t,"schedule ",d.id," del OK."),_.ct--}),{id:e})}l.length>0?Timer.set(1e3,!1,delSc,[l,t]):delKVS(t)}function delKVS(e){0===_.ct?(Shelly.call("KVS.Delete",{key:"schedulerIDs"+e}),print("Heating script #"+e,"is clean")):Timer.set(1e3,!1,delKVS,e)}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(_.sId=e.delta.id,start(_.sId))}));'
+        const watchdog = 'let scId=0;function start(){Shelly.call("KVS.Get",{key:"schedulerIDs"+scId},(function(e,l,d,c){e&&delSc(JSON.parse(e.value))}))}function delSc(e){Shelly.call("Schedule.Delete",{id:e},(function(e,l,d,c){0!==l?print("Script #"+scId,"schedule ",c.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",c.id," deleted by watchdog."),delKVS()}),{id:e})}function delKVS(){Shelly.call("KVS.Delete",{key:"schedulerIDs"+scId})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,start())}));'
         const scId = res.id > 0 ? res.id : data.id;
         Shelly.call('Script.PutCode', { id: scId, code: watchdog }, startScript, { id: scId });
     } else {
@@ -1171,9 +1111,14 @@ function startWatchdogScript(scriptId) {
             console.log(_.pId, "Watchdog script is not started.", msg, ". Schedules are not deleted if heating script is stopped or deleted.");
         }
     });
+    _.loopRunning = false;
 }
 /*  ---------  WATCHDOG END  ---------   */
 
-createWatchdog();
-loop();
+//start 1 sec loop-timer to check Shelly time during device boot
+//if Shelly has already time, then this timer will be closed immediately
+checkShellyTime();
+timer_handle = Timer.set(1000, true, checkShellyTime);
 
+//start the loop component
+Timer.set(_.loopFreq * 1000, true, loop);

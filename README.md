@@ -1,7 +1,12 @@
 # Smart and cheap heating with Shelly
+This Shelly script is designed to optimize heating activation by leveraging energy market prices from Elering, ensuring heating operates during the most cost-effective hours using various algorithms.
 
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
-  - [Script Overview](#script-overview)
+  - [Key Features](#key-features)
+  - [Monitoring and edit schedule](#monitoring-and-edit-schedule)
+    - [How to check the Heating Schedule](#how-to-check-the-heating-schedule)
+    - [How to edit schedule manually](#how-to-edit-schedule-manually)
+    - [How to monitor script execution](#how-to-monitor-script-execution)
   - [Configuring Script parameters](#configuring-script-parameters)
     - [Using Shelly App](#using-shelly-app)
     - [Using Shelly KVS](#using-shelly-kvs)
@@ -20,28 +25,44 @@
   - [How to Verify Script Execution](#how-to-verify-script-execution)
   - [How the Script Operates](#how-the-script-operates)
 - [Troubleshooting](#troubleshooting)
-  - [Message "This schedule contains invalid call method or params"](#message-this-schedule-contains-invalid-call-method-or-params)
-  - [Message "Id3: #1 Scheduler at: 12:00 price: 185.91 EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit."](#message-id3-1-scheduler-at-1200-price-18591-eurmwh-energy-price--transmission-failed-20-schedulers-is-the-shelly-limit)
   - [Error "Couldn't get script"](#error-couldnt-get-script)
   - [Advanced → Key Value Storage → Script Data](#advanced--key-value-storage--script-data)
 - [License](#license)
 - [Author](#author)
 
-## Script Overview
-This Shelly script is designed to optimize heating activation by leveraging energy market prices from Elering, ensuring heating operates during the most cost-effective hours using various algorithms.
-
-Key Features:
+## Key Features
 1. **Dynamic Heating Time Calculation**:
 Calculates optimal heating times for the next day based on weather forecasts and energy prices.
 
-2. **Time Period Division**:
+1. **Time Period Division**:
 Divides the day into time periods and activates heating during the cheapest hour within each period.
 
-3. **Price-Level Utilization**:
+1. **Price-Level Utilization**:
 Employs minimum and maximum price thresholds to keep the Shelly system consistently on or off based on cost efficiency.
 
 **Execution Schedule**:
 The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.    
+
+## Monitoring and edit schedule
+
+Starting from the script version 3.9 (January 2025), this script creates a single scheduler using an advanced timespec that includes all the required heating hours.
+
+### How to check the Heating Schedule
+To view the heating hours created by the script:
+1. Open the schedule.
+2. Click on Time to see the full heating schedule.
+
+|||
+|-|-|
+|<img src="images/oneschedule.jpg" alt="Open Schedule" width="200">|<img src="images/editschedule.jpg" alt="Open Schedule" width="200">|
+
+### How to edit schedule manually
+You can manually override the schedule by clicking on any hour to include or exclude it for a specific day, then lick Next &rarr; Next &rarr; Save.
+
+The next time the script calculates a new schedule, it will generate a fresh schedule with the updated timespec.
+
+### How to monitor script execution
+The field ``lastcalculation`` in KVS is updated each time electricity prices are retrieved from Elering and a heating schedule is generated for the next heating period.
 
 ## Configuring Script parameters
 
@@ -120,16 +141,15 @@ Heating mode options are described in the following table.
 
 10.  ``relayID: 0`` - Configures the Shelly relay ID when using a Shelly device with multiple relays. Default ``0``.
 
-
 ## Important To Know
 
-* <p>When the script is stopped, all schedules are deleted. Shelly only follows the heating algorithm when the script is running.</p>
+* <p>When the script is stopped, the schedule is deleted. Shelly only follows the heating algorithm when the script is running.</p>
 * <p>Only one script can run at a time on newer Shelly devices using Virtual Components, as they are limited to a maximum of 10 components.</p>
 * <p>Up to two instances of this script can run concurrently in KVS mode, both employing different algorithm. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly Plus 2PM.</p>
 * <p>This script creates a special "watchdog" script. This "watchdog" script ensures proper cleanup when the heating script is stopped or deleted.</p>
-* <p>To mitigate the impact of internet outages, this script uses parameter heating time to turn on heating based on historically cheap hours.</p>
-* <p>The "enable" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
-* <p>This script exclusively handles schedulers generated by its own processes. This script is designed to delete only those schedulers that it has created.</p>
+* <p>To mitigate the impact of internet outages, this script uses parameter ``heating time`` to turn on heating based on historically cheap hours.</p>
+* <p>The "Run on startup" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
+* <p>This script exclusively handles scheduler generated by its own processes. This script is designed to delete only the scheduler that it has created.</p>
 * <p>This solution will only have benefits if you have an hourly priced energy contract. If your energy contract features a flat rate, this solution will not contribute to reducing your energy bill.</p>
 * This script depends on the internet and these two services:
     * Electricity market price from [Elering API](https://dashboard.elering.ee/assets/api-doc.html#/nps-controller/getPriceUsingGET),
@@ -138,6 +158,9 @@ Heating mode options are described in the following table.
 <br>
 
 ## Tested Failure Scenarios
+During any of the failures below, Shelly uses the ``Heating Time`` duration to turn on heating based on historically cheap hours.
+Historical cheap hours are the following periods: 00:00-08:00, 12:00-15:00, and 20:00-23:00. In error mode, Shelly divides the heating time equally between the first and second halves of the day.
+
 1. Shelly is working, but the internet goes down due to a home router crash or internet provider malfunction. Shelly time continues running.
 2. After a power outage, the internet is not working, and Shelly has no time.
 3. Elering HTTP error occurs, and the Elering server is not reachable.
@@ -145,11 +168,6 @@ Heating mode options are described in the following table.
 5. Elering API returns incorrect data, and prices are missing.
 6. Weather forecast HTTP error occurs, and the server is unavailable.
 7. Weather forecast API service error occurs, and the JSON data is not received.
-
-During any of these failures, Shelly uses the ``Heating Time`` duration to turn on heating based on historically cheap hours.
-Historical cheap hours are the following periods: 00:00-08:00, 12:00-15:00, and 20:00-23:00. In error mode, Shelly divides the heating time equally between the first and second halves of the day.
-
-<br>
 
 # Smart Heating Algorithms
 
@@ -292,29 +310,10 @@ flowchart TD
 flowchart TD
     0[Start heating script] --> A
     A[Create 'watchdog' script </br>with an event handler] --> K{Is heating script </br>stopped or deleted?}
-    K -- Yes --> B[Find all this script schedules</br>and delete them]
+    K -- Yes --> B[Find the script schedule</br>and delete it]
 ```
 
 # Troubleshooting
-
-## Message "This schedule contains invalid call method or params"
-
-Currently, in Shelly device web page, all schedules are labeled with the message "This schedule contains an invalid call method or params," and attempting to click on any schedule fails to open them.
-
-This as a Shelly bug. It's important to note two key points regarding this issue:
-
-1. All schedules are accessible and viewable without any problems through the Shelly cloud or mobile app. Therefore, there is no cause for concern about the integrity of the schedules or their functionality.
-2. A temporary solution has been identified for accessing schedules through the device web page. By clicking on the schedule and then refreshing the page, users can successfully open the schedule.
-
-<img src="images/InvalidSchedule.jpg" alt="Invalid Schedules" width="750">
-
-## Message "Id3: #1 Scheduler at: 12:00 price: 185.91 EUR/MWh (energy price + transmission). FAILED, 20 schedulers is the Shelly limit."
-
-The attempt to add a scheduler has failed due to the Shelly-imposed limit of 20 schedulers. This limit is applicable to the entire device, irrespective of the Shelly model, including multichannel devices such as the Pro4PM. 
-
-> To address this limitation, we recommend utilizing the heating mode HEAT12H_FCST. This mode calculates schedules every twelve hours, enabling you to create up to 12 schedules within each twelve-hour cycle. This alternative mode ensures flexibility in scheduling while adhering to the device's limitations.
-
-<img src="images/ScheduleLimit.jpg" alt="Invalid Schedules" width="750">
 
 ## Error "Couldn't get script"
 
@@ -345,9 +344,9 @@ The script saves data in Shelly KVS (Key-Value-Storage) to preserve it in case o
 
 To access the stored data on the Shelly device web page, navigate to **Advanced &rarr; KVS**.
 
-1. Key: ``schedulerIDs1`` Value: ``[1,2,3,4,5,6,7]``
+1. Key: ``schedulerIDs1`` Value: ``1``
    
-    The numeric values represent schedule ID numbers created by the script. This information is crucial for each script to identify and manage schedules associated with it. It aids in the proper deletion of outdated schedules when creating new ones is necessary.
+    The numeric values represent schedule ID number created by the script. This information is crucial for each script to identify and manage schedule associated with it. It aids in the proper deletion of outdated schedules when creating new ones is necessary.
 
 2. Key: ``lastcalculation1`` Value: ``Fri Dec 27 2024 23:29:20 GMT+0200`` 
    
@@ -366,6 +365,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 # Author
 
-Created by Leivo Sepp, 07.01.2025
+Created by Leivo Sepp, 2024-2025
 
-[GitHub Repository](https://github.com/LeivoSepp/Shelly-Live-Tariff)
+[GitHub Repository](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly)

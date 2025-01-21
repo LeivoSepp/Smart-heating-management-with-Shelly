@@ -1,7 +1,7 @@
-# Nutikas ja odav kütmine Shellyga 
+# Nutikas ja odav börsihinna järgi kütmine Shellyga 
 See Shelly skript tagab kütteseadme töö kõige odavamate tundide ajal, kasutades elektri börsihindu ja erinevaid algoritme.
 
-- [Nutikas ja odav kütmine Shellyga](#nutikas-ja-odav-kütmine-shellyga)
+- [Nutikas ja odav börsihinna järgi kütmine Shellyga](#nutikas-ja-odav-börsihinna-järgi-kütmine-shellyga)
   - [Põhifunktsioonid](#põhifunktsioonid)
   - [Jälgimine ja ajakava muutmine](#jälgimine-ja-ajakava-muutmine)
     - [Kuidas kontrollida ajakava](#kuidas-kontrollida-ajakava)

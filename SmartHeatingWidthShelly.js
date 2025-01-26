@@ -10,6 +10,9 @@ activate heating during the most cost-effective hours each day, employing variou
 2. Division of heating into time periods, with activation during the cheapest hour within each period.
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 The script executes daily after 23:00 to establish heating timeslots for the following day.
+
+Ver 4.1
+Significant memory optimization, reduced from 16KB to 7.6KB.
 */
 
 /* Electricity transmission fees (EUR/MWh)
@@ -101,7 +104,7 @@ let _ = {
     rpcCl: 1,
     rpcBlock: 2, //block createSchedule and createWatchdog functions
     schedId: '',
-    eleringPrices: [],
+    eleringData: [],
     isSchedCreatedManually: false,
     existingSchedules: '',
     networkProvider: "None",
@@ -111,7 +114,7 @@ let _ = {
 let cntr = 0;
 
 function lazyLoadVirtComponents() {
-    return virtualComponents = [
+    return [
         {
             type: "group", id: 200, config: {
                 name: "Smart Heating"
@@ -579,13 +582,13 @@ function getElering() {
             row[1] = Number(body.substring(activePos, body.indexOf("\"", activePos)).replace(",", "."));
             // Add transfer fees
             row[1] += calculateTransferFees(row[0]);
-    
-            _.eleringPrices.push(row);
+
+            _.eleringData.push(row);
             activePos = body.indexOf("\n", activePos);
         }
         body = null; //clear memory
         //if elering API returns less than 24 rows, the script will try to download the data again after set of minutes
-        if (_.eleringPrices.length < 24) {
+        if (_.eleringData.length < 24) {
             handleError("Elering API didn't return prices, check again in " + _.loopFreq / 60 + " min.");
             return;
         }
@@ -595,12 +598,12 @@ function getElering() {
 
         //calculate schedules
         if (s.heatingMode.timePeriod <= 0) {
-            _.eleringPrices = calculateAlwaysOnLowPriceSchedules(_.eleringPrices);
+            _.eleringData = calculateAlwaysOnLowPriceSchedules(_.eleringData);
         } else {
-            _.eleringPrices = calculateHeatingPeriods(_.eleringPrices);
+            _.eleringData = calculateHeatingPeriods(_.eleringData);
         }
         _.isSchedCreatedManually = false;
-        setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
+        setShellyTimer(); //set default timer
         deleteSchedule();
     });
 }
@@ -741,15 +744,14 @@ function calculateImatraTransferFees(epoch) {
 /**
 Set countdown timer to flip Shelly status
  */
-function setShellyTimer(isOutInv, timerMin) {
-    const is_on = isOutInv ? "on" : "off";
-    const timerSec = timerMin * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
+function setShellyTimer() {
+    const timerSec = s.defaultTimer * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
     Shelly.call("Switch.SetConfig", {
         id: s.relayID,
         config: {
-            auto_on: isOutInv,
+            auto_on: s.isOutputInverted,
             auto_on_delay: timerSec,
-            auto_off: !isOutInv,
+            auto_off: !s.isOutputInverted,
             auto_off_delay: timerSec
         }
     });
@@ -765,18 +767,18 @@ function deleteSchedule() {
 
 // Create a new schedule with the advanced timespec to cover all the hours within the same schedule item
 function createSchedule() {
-     //waiting RPC calls to be completed
-     if (_.rpcBlock !== 1) {
+    //waiting RPC calls to be completed
+    if (_.rpcBlock !== 1) {
         Timer.set(500, false, createSchedule);
         return;
     }
-    if (_.eleringPrices === undefined || _.eleringPrices.length == 0) {
+    if (_.eleringData === undefined || _.eleringData.length == 0) {
         console.log(_.pId, "No heating calculated for any hours with the current configuration.")
         setKVS();
         return;
     }
-    let sortedPricesByTime = sort(_.eleringPrices, 0);
-    _.eleringPrices = [];
+    let sortedPricesByTime = sort(_.eleringData, 0);
+    _.eleringData = [];
     _.schedId = null;
     let hoursArr = [];
     let hourPricesArr = [];
@@ -837,12 +839,12 @@ function setShellyManualMode() {
     let cheapHoursDay = [0, 1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 12, 13, 14, 15, 7, 8, 9, 10, 11, 16, 17, 18, 19];
     const heatingHours = s.heatingMode.heatingTime * _.ctPeriods <= 24 ? s.heatingMode.heatingTime * _.ctPeriods : 24; //finds max hours to heat in 24h period 
 
-    _.eleringPrices = [];
+    _.eleringData = [];
     for (let i = 0; i < heatingHours; i++) {
-        _.eleringPrices.push([cheapHoursDay[i], "-"]);
+        _.eleringData.push([cheapHoursDay[i], "-"]);
     }
     cheapHoursDay = null;
-    setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
+    setShellyTimer(); //set default timer
     deleteSchedule();
 }
 

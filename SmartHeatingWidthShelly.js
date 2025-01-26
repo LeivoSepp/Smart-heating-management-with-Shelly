@@ -88,8 +88,6 @@ Forecast temp °C is "feels like": more information here: https://en.wikipedia.o
 */
 
 let _ = {
-    openMeteo: "https://api.open-meteo.com/v1/forecast?hourly=apparent_temperature&timezone=auto&forecast_days=1&forecast_hours=",
-    elering: "https://dashboard.elering.ee/api/nps/price/csv?fields=",
     heatTime: '',
     ctPeriods: '', //period count is up-rounded
     tsPrices: '',
@@ -103,105 +101,107 @@ let _ = {
     rpcCl: 1,
     rpcBlock: 2, //block createSchedule and createWatchdog functions
     schedId: '',
-    newSchedules: [],
+    eleringPrices: [],
     isSchedCreatedManually: false,
     existingSchedules: '',
     networkProvider: "None",
     oldVersion: 0,
-    version: 3.9,
+    version: 4.1,
 };
 let cntr = 0;
 
-const virtualComponents = [
-    {
-        type: "group", id: 200, config: {
-            name: "Smart Heating"
-        }
-    },
-    {
-        type: "enum", id: 200, config: {
-            name: "Heating Period (h)",
-            options: ["24", "12", "6", "0"],
-            default_value: "24",
-            persisted: true,
-            meta: { ui: { view: "dropdown", webIcon: 13, titles: { "24": "24 hour", "12": "12 hour", "6": "6 hour", "0": "No period" } } }
-        }
-    },
-    {
-        type: "number", id: 200, config: {
-            name: "Heating Time (h/period)",
-            default_value: 10,
-            min: 0,
-            max: 24,
-            persisted: true,
-            meta: { ui: { view: "slider", unit: "h/period" } }
-        }
-    },
-    {
-        type: "enum", id: 201, config: {
-            name: "Network Package",
-            options: ["NONE", "VORK1", "VORK2", "VORK4", "VORK5", "Partner24", "Partner24Plus", "Partner12", "Partner12Plus"],
-            default_value: "VORK2",
-            persisted: true,
-            meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Base", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak", "Partner24": "Partner24 Base", "Partner24Plus": "Partner24Plus Base", "Partner12": "Partner12 DayNight", "Partner12Plus": "Partner12Plus DayNight" } } }
-        }
-    },
-    {
-        type: "number", id: 201, config: {
-            name: "Heat On (min price)",
-            default_value: 1,
-            min: 0,
-            max: 100,
-            persisted: true,
-            meta: { ui: { view: "slider", unit: "€/MWh or less" } }
-        }
-    },
-    {
-        type: "number", id: 202, config: {
-            name: "Heat Off (max price)",
-            default_value: 300,
-            min: 0,
-            max: 500,
-            persisted: true,
-            meta: { ui: { view: "slider", unit: "€/MWh or more" } }
-        }
-    },
-    {
-        type: "boolean", id: 201, config: {
-            name: "Inverted Relay",
-            default_value: false,
-            persisted: true,
-            meta: { ui: { view: "toggle", webIcon: 7, titles: ["No", "Yes"] } }
-        }
-    },
-    {
-        type: "enum", id: 202, config: {
-            name: "Market Price Country",
-            options: ["ee", "fi", "lv", "lt"],
-            default_value: "ee",
-            persisted: true,
-            meta: { ui: { view: "dropdown", webIcon: 9, titles: { "ee": "Estonia", "fi": "Findland", "lv": "Latvia", "lt": "Lithuania" } } }
-        }
-    },
-    {
-        type: "boolean", id: 200, config: {
-            name: "Forecast Heat",
-            default_value: false,
-            persisted: true,
-            meta: { ui: { view: "toggle", webIcon: 14, titles: ["No", "Yes"] } }
-        }
-    },
-    {
-        type: "number", id: 203, config: {
-            name: "Forecast Impact +/-",
-            default_value: 0,
-            min: -6,
-            max: 6,
-            persisted: true,
-            meta: { ui: { view: "slider", unit: "h more heat" } }
-        }
-    },
-];
+function lazyLoadVirtComponents() {
+    return virtualComponents = [
+        {
+            type: "group", id: 200, config: {
+                name: "Smart Heating"
+            }
+        },
+        {
+            type: "enum", id: 200, config: {
+                name: "Heating Period (h)",
+                options: ["24", "12", "6", "0"],
+                default_value: "24",
+                persisted: true,
+                meta: { ui: { view: "dropdown", webIcon: 13, titles: { "24": "24 hour", "12": "12 hour", "6": "6 hour", "0": "No period" } } }
+            }
+        },
+        {
+            type: "number", id: 200, config: {
+                name: "Heating Time (h/period)",
+                default_value: 10,
+                min: 0,
+                max: 24,
+                persisted: true,
+                meta: { ui: { view: "slider", unit: "h/period" } }
+            }
+        },
+        {
+            type: "enum", id: 201, config: {
+                name: "Network Package",
+                options: ["NONE", "VORK1", "VORK2", "VORK4", "VORK5", "Partner24", "Partner24Plus", "Partner12", "Partner12Plus"],
+                default_value: "VORK2",
+                persisted: true,
+                meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Base", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak", "Partner24": "Partner24 Base", "Partner24Plus": "Partner24Plus Base", "Partner12": "Partner12 DayNight", "Partner12Plus": "Partner12Plus DayNight" } } }
+            }
+        },
+        {
+            type: "number", id: 201, config: {
+                name: "Heat On (min price)",
+                default_value: 1,
+                min: 0,
+                max: 100,
+                persisted: true,
+                meta: { ui: { view: "slider", unit: "€/MWh or less" } }
+            }
+        },
+        {
+            type: "number", id: 202, config: {
+                name: "Heat Off (max price)",
+                default_value: 300,
+                min: 0,
+                max: 500,
+                persisted: true,
+                meta: { ui: { view: "slider", unit: "€/MWh or more" } }
+            }
+        },
+        {
+            type: "boolean", id: 201, config: {
+                name: "Inverted Relay",
+                default_value: false,
+                persisted: true,
+                meta: { ui: { view: "toggle", webIcon: 7, titles: ["No", "Yes"] } }
+            }
+        },
+        {
+            type: "enum", id: 202, config: {
+                name: "Market Price Country",
+                options: ["ee", "fi", "lv", "lt"],
+                default_value: "ee",
+                persisted: true,
+                meta: { ui: { view: "dropdown", webIcon: 9, titles: { "ee": "Estonia", "fi": "Findland", "lv": "Latvia", "lt": "Lithuania" } } }
+            }
+        },
+        {
+            type: "boolean", id: 200, config: {
+                name: "Forecast Heat",
+                default_value: false,
+                persisted: true,
+                meta: { ui: { view: "toggle", webIcon: 14, titles: ["No", "Yes"] } }
+            }
+        },
+        {
+            type: "number", id: 203, config: {
+                name: "Forecast Impact +/-",
+                default_value: 0,
+                min: -6,
+                max: 6,
+                persisted: true,
+                meta: { ui: { view: "slider", unit: "h more heat" } }
+            }
+        },
+    ];
+}
 
 function start() {
     setAutoStart();
@@ -213,7 +213,7 @@ function start() {
 function setAutoStart() {
     if (!Shelly.getComponentConfig("script", _.sId).enable) {
         Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } },
-            function (res, err, msg, data) {
+            function (res, err, msg) {
                 if (err != 0) {
                     console.log(_.pId, "Heating script autostart is not enabled.", msg, ". After Shelly restart, this script will not start and new heating schedules are not created.");
                 }
@@ -243,76 +243,61 @@ function isNewerVersion(oldVer, newVer) {
 }
 
 function getKvsData() {
-    Shelly.call('KVS.GetMany', null, processKVSData);
-}
-function processKVSData(res, err, msg, data) {
-    let kvsData;
-    if (res) {
-        kvsData = res.items;
-        res = null;
-    }
-    //store scheduler ID to memory
-    _.existingSchedules = typeof kvsData["schedulerIDs" + _.sId] !== "undefined" && typeof JSON.parse(kvsData["schedulerIDs" + _.sId].value) === "number" ? JSON.parse(kvsData["schedulerIDs" + _.sId].value) : '';
-    //old version number is used to maintain backward compatibility
-    _.oldVersion = (kvsData["version" + _.sId] != null && typeof JSON.parse(kvsData["version" + _.sId].value) === "number") ? JSON.parse(kvsData["version" + _.sId].value) : 0;
+    Shelly.call('KVS.GetMany', null,
+        function (res) {
+            let kvsData;
+            if (res) {
+                kvsData = res.items;
+                res = null;
+            }
+            //store scheduler ID to memory
+            _.existingSchedules = typeof kvsData["schedulerIDs" + _.sId] !== "undefined" && typeof JSON.parse(kvsData["schedulerIDs" + _.sId].value) === "number" ? JSON.parse(kvsData["schedulerIDs" + _.sId].value) : '';
+            //old version number is used to maintain backward compatibility
+            _.oldVersion = (kvsData["version" + _.sId] != null && typeof JSON.parse(kvsData["version" + _.sId].value) === "number") ? JSON.parse(kvsData["version" + _.sId].value) : 0;
 
-    if (isVirtualComponentsAvailable()) {
-        let userConfig = [];
-        //create an array from the user settings to delete them from KVS
-        for (let i in s) userConfig.push(i + _.sId);
-
-        if (_.oldVersion <= 3.2) {
-            console.log(_.pId, "New virtual component installation.");
-            deleteAllKvs(userConfig);
-        } else if (_.oldVersion === 3.3) {
-            console.log(_.pId, "Upgrading from KVS to Virtual components.");
-            virtualComponents[1].config.default_value = JSON.stringify(JSON.parse(kvsData["heatingMode" + _.sId].value).timePeriod);
-            virtualComponents[2].config.default_value = JSON.parse(kvsData["heatingMode" + _.sId].value).heatingTime;
-            virtualComponents[8].config.default_value = JSON.parse(kvsData["heatingMode" + _.sId].value).isFcstUsed;
-            virtualComponents[4].config.default_value = JSON.parse(kvsData["alwaysOnLowPrice" + _.sId].value);
-            virtualComponents[5].config.default_value = JSON.parse(kvsData["alwaysOffHighPrice" + _.sId].value);
-            virtualComponents[6].config.default_value = JSON.parse(kvsData["isOutputInverted" + _.sId].value);
-            virtualComponents[7].config.default_value = kvsData["country" + _.sId].value;
-            virtualComponents[3].config.default_value = kvsData["elektrilevi" + _.sId].value;
-            virtualComponents[9].config.default_value = JSON.parse(kvsData["heatingCurve" + _.sId].value);
-
-            deleteAllKvs(userConfig);
-        } else {
-            console.log(_.pId, "Script in Virtual components mode.");
-            readAllVirtualComponents();
-        }
-    } else { // this is the KVS path if Shelly doesn't support Virtual components
-        console.log(_.pId, "Script in KVS mode.");
-        let isExistInKvs = false;
-        let userCongfigNotInKvs = [];
-        //iterate settings and then KVS
-        for (var k in s) {
-            for (var i in kvsData) {
-                //check if settings found in KVS
-                if (i == k + _.sId) {
-                    if (k == "elektrilevi" || k == "country") {
-                        if (_.oldVersion >= 3.2) {
-                            s[k] = kvsData[i].value; //do not convert strings
-                        } else {
-                            break; //store new versions of elektrilevi and country values <- this part is for backward compatibility
-                        }
-                    } else {
-                        s[k] = JSON.parse(kvsData[i].value); //convert string values to object
-                    }
-                    isExistInKvs = true;
-                    break;
+            if (isVirtualComponentsAvailable()) {
+                if (_.oldVersion <= 3.2) {
+                    console.log(_.pId, "New virtual component installation.");
+                    getAllVirtualComponents();
+                } else {
+                    console.log(_.pId, "Script in Virtual components mode.");
+                    readAllVirtualComponents();
                 }
+            } else { // this is the KVS path if Shelly doesn't support Virtual components
+                console.log(_.pId, "Script in KVS mode.");
+                let isExistInKvs = false;
+                let userCongfigNotInKvs = [];
+                //iterate settings and then KVS
+                for (var k in s) {
+                    for (var i in kvsData) {
+                        //check if settings found in KVS
+                        if (i == k + _.sId) {
+                            if (k == "elektrilevi" || k == "country") {
+                                if (_.oldVersion >= 3.2) {
+                                    s[k] = kvsData[i].value; //do not convert strings
+                                } else {
+                                    break; //store new versions of elektrilevi and country values <- this part is for backward compatibility
+                                }
+                            } else {
+                                s[k] = JSON.parse(kvsData[i].value); //convert string values to object
+                            }
+                            isExistInKvs = true;
+                            break;
+                        }
+                    }
+                    if (isExistInKvs) {
+                        isExistInKvs = false;
+                    } else if (typeof s[k] === "object") {
+                        userCongfigNotInKvs.push([k, JSON.stringify(s[k])]);
+                    } else {
+                        userCongfigNotInKvs.push([k, s[k]]);
+                    }
+                }
+                storeSettingsKvs(userCongfigNotInKvs);
+                userCongfigNotInKvs = null;
+                kvsData = null;
             }
-            if (isExistInKvs) {
-                isExistInKvs = false;
-            } else if (typeof s[k] === "object") {
-                userCongfigNotInKvs.push([k, JSON.stringify(s[k])]);
-            } else {
-                userCongfigNotInKvs.push([k, s[k]]);
-            }
-        }
-        storeSettingsKvs(userCongfigNotInKvs);
-    }
+        });
 }
 function storeSettingsKvs(userCongfigNotInKvs) {
     if (cntr < 6 - _.rpcCl) {
@@ -340,47 +325,22 @@ function storeSettingsKvs(userCongfigNotInKvs) {
     }
 }
 
-// Only in case of Virtual Components: delete user config from KVS store as all the config moved to Virtual components
-function deleteAllKvs(userConfig) {
-    if (cntr < 6 - _.rpcCl) {
-        for (let i = 0; i < _.rpcCl && i < userConfig.length; i++) {
-            let key = userConfig.splice(0, 1)[0];
-            cntr++;
-            Shelly.call("KVS.Delete", { key: key },
-                function (res, err, msg, data) {
-                    if (err === 0) {
-                        console.log(_.pId, "Deleted " + data.key + " from KVS store");
-                    } else {
-                        console.log(_.pId, "Failed to delete " + data.key + " from KVS store. Error: " + msg);
-                    }
-                    cntr--;
-                },
-                { key: key }
-            );
-        }
-    }
-    if (userConfig.length > 0) {
-        Timer.set(1000, false, deleteAllKvs, userConfig);
-    } else {
-        waitForRpcCalls(getAllVirtualComponents);
-    }
-}
-
 // Function to get all virtual components and delete them all before creating new
 function getAllVirtualComponents() {
-    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, checkComponents);
-}
-function checkComponents(res, err, msg, data) {
-    if (err === 0) {
-        if (res.components && res.components.length > 0) {
-            deleteVirtualComponents(res.components);
+    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, function (res, err, msg) {
+        if (err === 0) {
+            if (res.components && res.components.length > 0) {
+                deleteVirtualComponents(res.components);
+            } else {
+                addVirtualComponent(lazyLoadVirtComponents());
+            }
+            res = null;
         } else {
-            addVirtualComponent(virtualComponents);
+            console.log(_.pId, "Failed to get virtual components. Error: " + msg);
         }
-    } else {
-        console.log(_.pId, "Failed to get virtual components. Error: " + msg);
-    }
+    });
 }
+
 // Function to delete all virtual components
 function deleteVirtualComponents(vComponents) {
     if (cntr < 6 - _.rpcCl) {
@@ -403,7 +363,7 @@ function deleteVirtualComponents(vComponents) {
     if (vComponents.length > 0) {
         Timer.set(1000, false, deleteVirtualComponents, vComponents);
     } else {
-        waitForRpcCalls([addVirtualComponent, virtualComponents]);
+        waitForRpcCalls([addVirtualComponent, lazyLoadVirtComponents()]);
     }
 }
 
@@ -438,7 +398,7 @@ function addVirtualComponent(virtualComponents) {
 
 // add virtual components to group
 function setGroupConfig() {
-    const groupConfig = {
+    let groupConfig = {
         id: 200,
         value: [
             "enum:200",
@@ -452,71 +412,66 @@ function setGroupConfig() {
             "enum:202"
         ]
     };
-    Shelly.call("Group.Set", groupConfig, function (res, err, msg, data) {
+    Shelly.call("Group.Set", groupConfig, function (res, err, msg) {
         if (err !== 0) {
             console.log(_.pId, "Failed to set group config. Error: " + msg);
         }
     });
+    groupConfig = null;
     readAllVirtualComponents();
 }
 
 function readAllVirtualComponents() {
-    //this is for adding Imatra packages during the upgrade to 3.7
-    if (_.oldVersion < 3.7 && _.oldVersion >= 3.4) {
-        Shelly.call("Enum.SetConfig", virtualComponents[3], function (res, err, msg, data) {
-            if (err !== 0) {
-                console.log(_.pId, "Failed to set enum config. Error: " + msg);
+    //this function reads all virtual components and stores the values to memory
+    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] },
+        function (res, err, msg) {
+            if (err === 0) {
+                let components = res.components;
+                res = null;
+                if (components && components.length > 0) {
+                    for (let i in components) {
+                        let compValue = components[i].status.value;
+                        switch (components[i].key) {
+                            case "enum:200":
+                                s.heatingMode.timePeriod = JSON.parse(compValue);
+                                break;
+                            case "number:200":
+                                s.heatingMode.heatingTime = JSON.parse(compValue);
+                                break;
+                            case "boolean:200":
+                                s.heatingMode.isFcstUsed = JSON.parse(compValue);
+                                break;
+                            case "enum:201":
+                                s.elektrilevi = compValue;
+                                break;
+                            case "number:201":
+                                s.alwaysOnLowPrice = JSON.parse(compValue);
+                                break;
+                            case "number:202":
+                                s.alwaysOffHighPrice = JSON.parse(compValue);
+                                break;
+                            case "boolean:201":
+                                s.isOutputInverted = JSON.parse(compValue);
+                                break;
+                            case "enum:202":
+                                s.country = compValue;
+                                break;
+                            case "number:203":
+                                s.heatingCurve = JSON.parse(compValue);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    waitForRpcCalls(main);
+                    components = null;
+                } else {
+                    console.log(_.pId, "No virtual components found.");
+                }
+            } else {
+                console.log(_.pId, "Failed to get virtual components. Error: " + msg);
             }
         });
-    }
-    //this function reads all virtual components and stores the values to memory
-    Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] }, processComponents);
-}
-function processComponents(res, err, msg, data) {
-    if (err === 0) {
-        const components = res.components;
-        res = null;
-        if (components && components.length > 0) {
-            for (let i in components) {
-                switch (components[i].key) {
-                    case "enum:200":
-                        s.heatingMode.timePeriod = JSON.parse(components[i].status.value);
-                        break;
-                    case "number:200":
-                        s.heatingMode.heatingTime = JSON.parse(components[i].status.value);
-                        break;
-                    case "boolean:200":
-                        s.heatingMode.isFcstUsed = JSON.parse(components[i].status.value);
-                        break;
-                    case "enum:201":
-                        s.elektrilevi = components[i].status.value;
-                        break;
-                    case "number:201":
-                        s.alwaysOnLowPrice = JSON.parse(components[i].status.value);
-                        break;
-                    case "number:202":
-                        s.alwaysOffHighPrice = JSON.parse(components[i].status.value);
-                        break;
-                    case "boolean:201":
-                        s.isOutputInverted = JSON.parse(components[i].status.value);
-                        break;
-                    case "enum:202":
-                        s.country = components[i].status.value;
-                        break;
-                    case "number:203":
-                        s.heatingCurve = JSON.parse(components[i].status.value);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            waitForRpcCalls(main);
-        } else {
-            console.log(_.pId, "No virtual components found.");
-        }
-    } else {
-        console.log(_.pId, "Failed to get virtual components. Error: " + msg);
-    }
 }
 /**
 This is the main script where all the logic starts.
@@ -552,30 +507,22 @@ Get Open-Meteo min and max "feels like" temperatures
 function getForecast() {
     const lat = JSON.stringify(Shelly.getComponentConfig("sys").location.lat);
     const lon = JSON.stringify(Shelly.getComponentConfig("sys").location.lon);
-    const omUrl = _.openMeteo + s.heatingMode.timePeriod + "&latitude=" + lat + "&longitude=" + lon;
+    let openMeteo = "https://api.open-meteo.com/v1/forecast?hourly=apparent_temperature&timezone=auto&forecast_days=1&forecast_hours=";
+    let omUrl = openMeteo + s.heatingMode.timePeriod + "&latitude=" + lat + "&longitude=" + lon;
     console.log(_.pId, "Forecast query: ", omUrl)
-    try {
-        Shelly.call("HTTP.GET", { url: omUrl, timeout: 5, ssl_ca: "*" }, fcstCalc);
-    }
-    catch (error) {
-        handleError("Get forecast HTTP error " + error + " check again in " + _.loopFreq / 60 + " min.");
-    }
-}
+    Shelly.call("HTTP.GET", { url: omUrl, timeout: 5, ssl_ca: "*" }, function (res, err) {
 
-/* Calculate heating hours */
-function fcstCalc(res, err, msg) {
-    try {
-        if (err != 0 || res === null || res.code != 200 || JSON.parse(res.body)["error"]) {
+        if (err != 0 || res === null || res.code != 200) {
             handleError("Get forecast HTTP.GET error, check again in " + _.loopFreq / 60 + " min.");
             return;
         }
-        const jsonFcst = JSON.parse(res.body); //open-meteo json response
-        const aTemp = jsonFcst["hourly"]["apparent_temperature"]; //get 6h, 12h or 24h temperatures
+        //open-meteo json response and get 6h, 12h or 24h temperatures
+        const aTemp = JSON.parse(res.body)["hourly"]["apparent_temperature"];
+        res = null;
         let sumFcst = 0;
         for (let i = 0; i < aTemp.length; i++) {
             sumFcst += aTemp[i];
         }
-        res = null;
 
         const tempFcst = Math.ceil(sumFcst / s.heatingMode.timePeriod); //AVG and round temperature up
         _.tsFcst = epoch();  //store the timestamp into memory
@@ -589,11 +536,8 @@ function fcstCalc(res, err, msg) {
         _.heatTime = _.heatTime > s.heatingMode.timePeriod ? s.heatingMode.timePeriod : _.heatTime; //heating time can't be more than period
 
         console.log(_.pId, "Temperture forecast width windchill is ", tempFcst, " °C, and heating enabled for ", _.heatTime, " hours.");
-
         getElering(); //call elering
-    } catch (error) {
-        handleError("Get forecast JSON error," + error + "check again in " + _.loopFreq / 60 + " min.");
-    }
+    });
 }
 /* Get electricity market price CSV file from Elering.  */
 function getElering() {
@@ -601,14 +545,64 @@ function getElering() {
     // Determine the date range for Elering query
     const dtRange = getEleringDateRange(tzInSec);
     // Build Elering URL
-    const elUrl = buildEleringUrl(dtRange[0], dtRange[1]);
+    let elering = "https://dashboard.elering.ee/api/nps/price/csv?fields=";
+    let elUrl = elering + s.country + "&start=" + dtRange[0] + "&end=" + dtRange[1];
 
     console.log(_.pId, "Elering query: ", elUrl);
-    try {
-        Shelly.call("HTTP.GET", { url: elUrl, timeout: 5, ssl_ca: "*" }, priceCalc);
-    } catch (error) {
-        handleError("Elering HTTP.GET error" + error + "check again in " + _.loopFreq / 60 + " min.");
-    }
+    Shelly.call("HTTP.GET", { url: elUrl, timeout: 5, ssl_ca: "*" }, function (res, err) {
+        if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
+            handleError("Elering HTTP.GET, check again in " + _.loopFreq / 60 + " min.");
+            return;
+        }
+        //convert the elektrilevi packet value to variable
+        s.elektrilevi = eval(s.elektrilevi);
+
+        // Convert base64 to text and discard header
+        res.body_b64 = atob(res.body_b64);
+        let body = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
+        res = null; //clear memory
+        let activePos = 0;
+        while (activePos >= 0) {
+            body = body.substring(activePos);
+            activePos = 0;
+            let row = [0, 0];
+            activePos = body.indexOf("\"", activePos) + 1;
+            if (activePos === 0) {
+                break; // End of data
+            }
+            // Epoch
+            row[0] = Number(body.substring(activePos, body.indexOf("\"", activePos)));
+            // Skip "; after timestamp
+            activePos = body.indexOf("\"", activePos) + 2;
+            // Price
+            activePos = body.indexOf(";\"", activePos) + 2;
+            row[1] = Number(body.substring(activePos, body.indexOf("\"", activePos)).replace(",", "."));
+            // Add transfer fees
+            row[1] += calculateTransferFees(row[0]);
+    
+            _.eleringPrices.push(row);
+            activePos = body.indexOf("\n", activePos);
+        }
+        body = null; //clear memory
+        //if elering API returns less than 24 rows, the script will try to download the data again after set of minutes
+        if (_.eleringPrices.length < 24) {
+            handleError("Elering API didn't return prices, check again in " + _.loopFreq / 60 + " min.");
+            return;
+        }
+        //store the timestamp into memory
+        _.tsPrices = epoch();
+        console.log(_.pId, "We got market prices from Elering ", new Date().toString());
+
+        //calculate schedules
+        if (s.heatingMode.timePeriod <= 0) {
+            _.eleringPrices = calculateAlwaysOnLowPriceSchedules(_.eleringPrices);
+        } else {
+            _.eleringPrices = calculateHeatingPeriods(_.eleringPrices);
+        }
+        _.isSchedCreatedManually = false;
+        setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
+        deleteSchedule();
+    });
 }
 function getShellyTimezone() {
     const shEpochUtc = Shelly.getComponentStatus("sys").unixtime;
@@ -632,86 +626,19 @@ function getEleringDateRange(tzInSec) {
     const dtEnd = isoTimePlusDay + "T" + (24 - tzInSec / 3600 - 1) + ":00Z";
     return [dtStart, dtEnd];
 }
-function buildEleringUrl(dtStart, dtEnd) {
-    return _.elering + s.country + "&start=" + dtStart + "&end=" + dtEnd;
-}
 
-/**
-Price calculation logic.
-Creating time periods etc.
-*/
-function priceCalc(res, err, msg) {
-    if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
-        handleError("Elering HTTP.GET, check again in " + _.loopFreq / 60 + " min.");
-        return;
-    }
-    //convert the elektrilevi packet value to variable
-    s.elektrilevi = eval(s.elektrilevi);
-
-    // Convert base64 to text and discard header
-    res.body_b64 = atob(res.body_b64);
-    const csvData = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
-    res = null; //clear memory
-    const eleringPrices = parseEleringPrices(csvData);
-    //if elering API returns less than 23 rows, the script will try to download the data again after set of minutes
-    if (eleringPrices.length < 24) {
-        handleError("Elering API didn't return prices, check again in " + _.loopFreq / 60 + " min.");
-        return;
-    }
-    //store the timestamp into memory
-    _.tsPrices = epoch();
-    console.log(_.pId, "We got market prices from Elering ", new Date().toString());
-
-    //calculate schedules
-    _.newSchedules = [];
-    if (s.heatingMode.timePeriod <= 0) {
-        _.newSchedules = calculateAlwaysOnLowPriceSchedules(eleringPrices);
-    } else {
-        _.newSchedules = calculateHeatingPeriods(eleringPrices);
-    }
-    _.isSchedCreatedManually = false;
-    setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
-    deleteSchedule();
-}
-/**
- * Parse Elering prices from the response body.
- */
-function parseEleringPrices(body) {
-    let eleringPrices = [];
-    let activePos = 0;
-    while (activePos >= 0) {
-        body = body.substring(activePos);
-        activePos = 0;
-        let row = [0, 0];
-        activePos = body.indexOf("\"", activePos) + 1;
-        if (activePos === 0) {
-            break; // End of data
-        }
-        // Epoch
-        row[0] = Number(body.substring(activePos, body.indexOf("\"", activePos)));
-        // Skip "; after timestamp
-        activePos = body.indexOf("\"", activePos) + 2;
-        // Price
-        activePos = body.indexOf(";\"", activePos) + 2;
-        row[1] = Number(body.substring(activePos, body.indexOf("\"", activePos)).replace(",", "."));
-        // Add transfer fees
-        row[1] += calculateTransferFees(row[0]);
-
-        eleringPrices.push(row);
-        activePos = body.indexOf("\n", activePos);
-    }
-    return eleringPrices;
-}
 /**
  * Calculate schedules based on alwaysOnLowPrice.
  */
-function calculateAlwaysOnLowPriceSchedules(eleringPrices) {
+function calculateAlwaysOnLowPriceSchedules(ePrices) {
     let newScheds = [];
-    for (let a = 0; a < eleringPrices.length; a++) {
-        let transferFee = calculateTransferFees(eleringPrices[a][0]);
-        if (eleringPrices[a][1] - transferFee < s.alwaysOnLowPrice) {
-            newScheds.push([new Date(eleringPrices[a][0] * 1000).getHours(), eleringPrices[a][1]]);
-            console.log(_.pId, "Energy price ", eleringPrices[a][1] - transferFee, " EUR/MWh at ", new Date(eleringPrices[a][0] * 1000).getHours() + ":00 is less than min price and used for heating.");
+    for (let a = 0; a < ePrices.length; a++) {
+        let timestamp = ePrices[a][0];
+        let price = ePrices[a][1];
+        let transferFee = calculateTransferFees(timestamp);
+        if (ePrices[a][1] - transferFee < s.alwaysOnLowPrice) {
+            newScheds.push([new Date(timestamp * 1000).getHours(), price]);
+            console.log(_.pId, "Energy price ", price - transferFee, " EUR/MWh at ", new Date(timestamp * 1000).getHours() + ":00 is less than min price and used for heating.");
         }
     }
     if (!newScheds.length) {
@@ -722,40 +649,40 @@ function calculateAlwaysOnLowPriceSchedules(eleringPrices) {
 /**
  * Calculate schedules based on heating time.
  */
-function calculateHeatingPeriods(eleringPrices) {
-    let period = [];
-    let sortedPeriod = [];
+function calculateHeatingPeriods(ePrices) {
     let newScheds = [];
 
     //the number of period when the script is executed in case of forecast used
-    const nmPeriod = Math.ceil((new Date().getHours() % 23 + 2) / s.heatingMode.timePeriod);
+    let nmPeriod = Math.ceil((new Date().getHours() % 23 + 2) / s.heatingMode.timePeriod);
 
     // Create an array for each heating period, sort, and push the prices 
     for (let i = 0; i < _.ctPeriods; i++) {
         if (s.heatingMode.isFcstUsed && (i + 1) != nmPeriod) { continue; } //in case of forecast, only one period is calculated
         let k = 0;
         let hoursInPeriod = (i + 1) * s.heatingMode.timePeriod > 24 ? 24 : (i + 1) * s.heatingMode.timePeriod;
+        let onePeriod = [];
         for (let j = i * s.heatingMode.timePeriod; j < hoursInPeriod; j++) {
-            period[k] = eleringPrices[j];
+            onePeriod[k] = ePrices[j];
             k++;
         }
-        sortedPeriod = sort(period, 1); //sort by price
-        let heatingHours = sortedPeriod.length < _.heatTime ? sortedPeriod.length : _.heatTime; //finds max hours to heat in that period 
+        onePeriod = sort(onePeriod, 1); //sort by price
+        let heatingHours = onePeriod.length < _.heatTime ? onePeriod.length : _.heatTime; //finds max hours to heat in that period 
 
-        for (let a = 0; a < sortedPeriod.length; a++) {
-            let transferFee = calculateTransferFees(sortedPeriod[a][0]);
-            if ((a < heatingHours || sortedPeriod[a][1] - transferFee < s.alwaysOnLowPrice) && !(sortedPeriod[a][1] - transferFee > s.alwaysOffHighPrice)) {
-                newScheds.push([new Date((sortedPeriod[a][0]) * 1000).getHours(), sortedPeriod[a][1]]);
+        for (let a = 0; a < onePeriod.length; a++) {
+            let timestamp = onePeriod[a][0];
+            let price = onePeriod[a][1];
+            let transferFee = calculateTransferFees(timestamp);
+            if ((a < heatingHours || price - transferFee < s.alwaysOnLowPrice) && !(price - transferFee > s.alwaysOffHighPrice)) {
+                newScheds.push([new Date((timestamp) * 1000).getHours(), price]);
             }
-
             //If some hours are too expensive to use for heating, then just let user know for this
-            if (a < heatingHours && sortedPeriod[a][1] - transferFee > s.alwaysOffHighPrice) {
-                console.log(_.pId, "Energy price ", sortedPeriod[a][1] - transferFee, " EUR/MWh at ", new Date((sortedPeriod[a][0]) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
+            if (a < heatingHours && price - transferFee > s.alwaysOffHighPrice) {
+                print(_.pId, "Energy price ", price - transferFee, " EUR/MWh at ", new Date((timestamp) * 1000).getHours() + ":00 is more expensive than max price and not used for heating.")
             }
         }
     }
     if (!newScheds.length) {
-        console.log(_.pId, "Current configuration does not permit heating during any hours; it is likely that the alwaysOffHighPrice value is set too low.")
+        print(_.pId, "Current configuration does not permit heating during any hours; it is likely that the alwaysOffHighPrice value is set too low.")
     }
     return newScheds;
 }
@@ -781,7 +708,7 @@ function calculateElektrileviTransferFees(epoch) {
     } else if ((month >= 10 || month <= 2) && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
         // peak daytime: Nov-Mar: MO-FR at 09:00–12:00 and at 16:00–20:00
         return s.elektrilevi.dayMaxRate;
-    } else if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
+    } else if (day === 6 || day === 0 || hour < 7 || hour >= 22) {
         //night-time: MO-FR at 22:00–07:00, SA-SU all day
         return s.elektrilevi.nightRate;
     } else {
@@ -789,13 +716,11 @@ function calculateElektrileviTransferFees(epoch) {
         return s.elektrilevi.dayRate;
     }
 }
-function isSummerTime() {
-    return getShellyTimezone() / 60 / 60 === 3;
-}
+
 function calculateImatraTransferFees(epoch) {
     const hour = new Date(epoch * 1000).getHours();
     const day = new Date(epoch * 1000).getDay();
-    if (isSummerTime()) {
+    if (getShellyTimezone() / 60 / 60 === 3) { //summer time
         if (hour < 8 || day === 6 || day === 0) {
             //summer-night-time: MO-FR at 00:00–08:00, SA-SU all day
             return s.elektrilevi.nightRate;
@@ -840,20 +765,26 @@ function deleteSchedule() {
 
 // Create a new schedule with the advanced timespec to cover all the hours within the same schedule item
 function createSchedule() {
-    //waiting RPC calls to be completed
-    if (_.rpcBlock !== 1) {
+     //waiting RPC calls to be completed
+     if (_.rpcBlock !== 1) {
         Timer.set(500, false, createSchedule);
         return;
     }
-    let sortedSched = sort(_.newSchedules, 0);
+    if (_.eleringPrices === undefined || _.eleringPrices.length == 0) {
+        console.log(_.pId, "No heating calculated for any hours with the current configuration.")
+        setKVS();
+        return;
+    }
+    let sortedPricesByTime = sort(_.eleringPrices, 0);
+    _.eleringPrices = [];
     _.schedId = null;
     let hoursArr = [];
     let hourPricesArr = [];
-    for (let i = 0; i < sortedSched.length; i++) {
-        let hr = sortedSched[i][0];
+    for (let i = 0; i < sortedPricesByTime.length; i++) {
+        let hr = sortedPricesByTime[i][0];
         hoursArr.push(hr);
         let t = hr < 10 ? "0" + hr : hr;
-        hourPricesArr.push(t + ":00 (" + sortedSched[i][1] + ")");
+        hourPricesArr.push(t + ":00 (" + sortedPricesByTime[i][1] + ")");
     }
     const hours = hoursArr.join(","); //create timespec
     const prices = hourPricesArr.join(", "); //create hours (prices) only for console.log
@@ -868,17 +799,17 @@ function createSchedule() {
                 on: !s.isOutputInverted
             }
         }]
-    }, processSchedule, { hours: hours, prices: prices });
-}
-function processSchedule(res, err, msg, data) {
-    if (err !== 0) {
-        console.log(_.pId, "Scheduler for hours: ", data.hours, " FAILED.");
-    } else {
-        console.log(_.pId, "Heating will be turned on to following hours 'HH:mm (EUR/MWh Energy Price + Transmission)': ", data.prices);
-        _.schedId = res.id; //last scheduleID
+    }, function (res, err, msg, data) {
+        if (err !== 0) {
+            console.log(_.pId, "Scheduler for hours: ", data.hours, " is not created.");
+        } else {
+            console.log(_.pId, "Heating will be turned on to following hours 'HH:mm (EUR/MWh Energy Price + Transmission)': ", data.prices);
+            _.schedId = res.id; //last scheduleID
+        }
         setKVS();
-    }
+    }, { hours: hours, prices: prices });
 }
+
 
 /**
 Storing the scheduler IDs in KVS to not loose them in case of power outage
@@ -903,13 +834,14 @@ function setShellyManualMode() {
     _.isSchedCreatedManually = true;
 
     // create schedules for the historical cheap hours manually
-    const cheapHoursDay = [0, 1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 12, 13, 14, 15, 7, 8, 9, 10, 11, 16, 17, 18, 19];
+    let cheapHoursDay = [0, 1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 12, 13, 14, 15, 7, 8, 9, 10, 11, 16, 17, 18, 19];
     const heatingHours = s.heatingMode.heatingTime * _.ctPeriods <= 24 ? s.heatingMode.heatingTime * _.ctPeriods : 24; //finds max hours to heat in 24h period 
 
-    _.newSchedules = [];
+    _.eleringPrices = [];
     for (let i = 0; i < heatingHours; i++) {
-        _.newSchedules.push([cheapHoursDay[i], "no price"]);
+        _.eleringPrices.push([cheapHoursDay[i], "-"]);
     }
+    cheapHoursDay = null;
     setShellyTimer(s.isOutputInverted, s.defaultTimer); //set default timer
     deleteSchedule();
 }
@@ -961,7 +893,6 @@ function handleError(manualModeReason) {
  */
 function waitForRpcCalls(userdata) {
     if (cntr !== 0) {
-        //console.log("Shelly is waiting for ", cntr, " RPC call(s) to complete.");
         Timer.set(1000, false, waitForRpcCalls, userdata);
         return;
     }
@@ -1034,7 +965,6 @@ function checkShellyTime() {
             loop(); //start the loop with no time
             loopNotStarted = false;
         }
-        //waiting timeserver response
         return;
     }
 }
@@ -1047,21 +977,20 @@ function createWatchdog() {
         Timer.set(500, false, createWatchdog);
         return;
     }
-    Shelly.call('Script.List', null, scriptList);
-}
-function scriptList(res, err, msg, data) {
-    if (res) {
-        let wdId = 0;
-        const s = res.scripts;
-        res = null;
-        for (let i = 0; i < s.length; i++) {
-            if (s[i].name === "watchdog") {
-                wdId = s[i].id;
-                break;
+    Shelly.call('Script.List', null, function (res) {
+        if (res) {
+            let wdId = 0;
+            const s = res.scripts;
+            res = null;
+            for (let i = 0; i < s.length; i++) {
+                if (s[i].name === "watchdog") {
+                    wdId = s[i].id;
+                    break;
+                }
             }
+            createScript(wdId);
         }
-        createScript(wdId);
-    }
+    });
 }
 /** Create a new script (id==0) or stop the existing script (id<>0) if watchdog found. */
 function createScript(id) {
@@ -1073,28 +1002,26 @@ function createScript(id) {
 }
 /** Add code to the watchdog script */
 function putCode(res, err, msg, data) {
-    if (err === 0) {
-        const watchdog = 'let scId=0;function start(){Shelly.call("KVS.Get",{key:"schedulerIDs"+scId},(function(e,l,d,c){e&&delSc(JSON.parse(e.value))}))}function delSc(e){Shelly.call("Schedule.Delete",{id:e},(function(e,l,d,c){0!==l?print("Script #"+scId,"schedule ",c.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",c.id," deleted by watchdog."),delKVS()}),{id:e})}function delKVS(){Shelly.call("KVS.Delete",{key:"schedulerIDs"+scId})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,start())}));'
-        const scId = res.id > 0 ? res.id : data.id;
-        Shelly.call('Script.PutCode', { id: scId, code: watchdog }, startScript, { id: scId });
-    } else {
+    if (err !== 0) {
         console.log(_.pId, "Watchdog script creation failed.", msg, ". Schedules are not deleted if heating script is stopped or deleted.");
-    }
-}
-/** Enable autostart and start the watchdog script */
-function startScript(res, err, msg, data) {
-    if (err === 0) {
-        enableAutoStart(data.id);
-        startWatchdogScript(data.id);
     } else {
-        console.log(_.pId, "Adding code to the script is failed.", msg, ". Schedules are not deleted if heating script is stopped or deleted.")
+        let watchdog = 'let scId=0;function start(){Shelly.call("KVS.Get",{key:"schedulerIDs"+scId},(function(e,l,d,c){e&&delSc(JSON.parse(e.value))}))}function delSc(e){Shelly.call("Schedule.Delete",{id:e},(function(e,l,d,c){0!==l?print("Script #"+scId,"schedule ",c.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",c.id," deleted by watchdog."),delKVS()}),{id:e})}function delKVS(){Shelly.call("KVS.Delete",{key:"schedulerIDs"+scId})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,start())}));'
+        const scId = res.id > 0 ? res.id : data.id;
+        Shelly.call('Script.PutCode', { id: scId, code: watchdog }, function (res, err, msg, data) {
+            if (err === 0) {
+                enableAutoStart(data.id);
+                startWatchdogScript(data.id);
+            } else {
+                console.log(_.pId, "Adding code to the script is failed.", msg, ". Schedules are not deleted if heating script is stopped or deleted.")
+            }
+        }, { id: scId });
     }
 }
 
 /** Enable autostart for the watchdog script */
 function enableAutoStart(scriptId) {
     if (!Shelly.getComponentConfig("script", scriptId).enable) {
-        Shelly.call('Script.SetConfig', { id: scriptId, config: { enable: true } }, function (res, err, msg, data) {
+        Shelly.call('Script.SetConfig', { id: scriptId, config: { enable: true } }, function (res, err, msg) {
             if (err !== 0) {
                 console.log(_.pId, "Watchdog script autostart is not enabled.", msg, ". After Shelly restart, this script will not start and schedules are not deleted if heating script is stopped or deleted.");
             }
@@ -1104,7 +1031,7 @@ function enableAutoStart(scriptId) {
 
 /** Start the watchdog script */
 function startWatchdogScript(scriptId) {
-    Shelly.call('Script.Start', { id: scriptId }, function (res, err, msg, data) {
+    Shelly.call('Script.Start', { id: scriptId }, function (res, err, msg) {
         if (err === 0) {
             console.log(_.pId, "Watchdog script created and started successfully.");
         } else {

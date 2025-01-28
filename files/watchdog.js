@@ -1,28 +1,30 @@
 //This is a watchdog reference code
 let scId = 0;
-Shelly.addStatusHandler(function (status) {
-    if (status.name === 'script' && !status.delta.running) {
-        scId = status.delta.id;
-        start();
+Shelly.addStatusHandler(function (res) {
+    if (res.name === 'script' && !res.delta.running) {
+        scId = res.delta.id;
+        strt();
     }
 });
-function start() {
-    Shelly.call('KVS.Get', { key: 'schedulerIDs' + scId }, function (res, err, msg, data) {
-        if (res) {
-            delSc(JSON.parse(res.value));
-        }
-    });
+function strt() {
+    Shelly.call('KVS.Get', { key: "SystemData" + scId },
+        function (res) {
+            if (res) {
+                delS(JSON.parse(res.value));
+            }
+        });
 }
-function delSc(id) {
-    Shelly.call("Schedule.Delete", { id: id },
+function delS(sDat) {
+    Shelly.call("Schedule.Delete", { id: sDat.ExistingSchedule },
         function (res, err, msg, data) {
             if (err !== 0) { print('Script #' + scId, 'schedule ', data.id, ' deletion by watchdog failed.'); }
             else { print('Script #' + scId, 'schedule ', data.id, ' deleted by watchdog.'); }
-            delKVS();
-        }, { id: id }
+        }, { id: sDat.ExistingSchedule }
     );
+    updK(sDat);
 }
-function delKVS() {
-    Shelly.call('KVS.Delete', { key: 'schedulerIDs' + scId });
+function updK(sDat) {
+    sDat.ExistingSchedule = 0;
+    Shelly.call("KVS.set", { key: "SystemData" + scId, value: JSON.stringify(sDat) },);
 }
 

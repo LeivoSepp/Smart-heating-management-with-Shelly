@@ -343,6 +343,7 @@ Täpse ilmaprognoosi saamiseks on tarvis teada asukohta, et arvutada välja pari
 
 ### Shelly geograafiline asukoht
 
+> [!IMPORTANT]
 > Veenduge, et teie Shelly seadmel oleks õige asukohateave, kontrollides Shelly &rarr; Seaded &rarr; Geolokatsioon &rarr; Laiuskraad/pikkuskraad.
 
 Märkus: Shelly asukoht määratakse teie internetiteenuse pakkuja IP-aadressi põhjal, mis ei pruugi täpselt kajastada teie kodu asukohta. Kontrollige ja uuendage vajadusel laius- ja pikkuskraadi seadeid.

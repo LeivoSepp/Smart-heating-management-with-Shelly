@@ -10,20 +10,6 @@ activate heating during the most cost-effective hours each day, employing variou
 2. Division of heating into time periods, with activation during the cheapest hour within each period.
 3. Utilization of min-max price levels to maintain the Shelly system consistently on or off.
 The script executes daily after 23:00 to establish heating timeslots for the following day.
- 
-Version 4.2
-- KVS data storage for configuration and system data structure changed.
-- Script supports two instances of the same script running on same Shelly device.
-    - If Shelly supports Virtual Components, the two instances are separated:
-        - First instance is using Virtual Components. Default Relay ID is 0.
-        - Second instance is using KVS. Relay ID can be changed through KVS.
-    - If Shelly does not support Virtual Components, both instances are using KVS.
-- Memory optimization, reduced from 7.6KB to 4.3KB.
-- Variable names are shortened to reduce memory usage.
-- Upgrade from previous versions is not supported.
-Ver 4.1
-- Significant memory optimization, reduced from 16KB to 7.6KB.
-- Bug fix when no heating periods are used.
 */
 
 /* Electricity transmission fees (EUR/MWh) excluding VAT.
@@ -43,13 +29,11 @@ function pack() {
         NONE: { dRt: 0, nRt: 0, dMRt: 0, hMRt: 0 },
     }
 }
-/****** PROGRAM INITIAL SETTINGS ******/
+/****** INITIAL SETTINGS ******/
 /* 
 After the initial run, all user settings are stored in the Shelly 1) KVS or 2) Virtual components (in case virtual components are supported).
 To modify user settings, you’ll need to access the Shelly KVS via: Menu → Advanced → KVS on the Shelly web page.
 Once you’ve updated the settings, restart the script to apply the changes or wait for the next scheduled run.
-If the Shelly supports Virtual components, the script will automatically create them and store the settings there.
-This allows you to modify the heating settings directly from the Shelly web page or Shelly mobile app.
  
 timePeriod: Heating Period is the time during which heating time is calculated. (0 -> only min-max price used, 24 -> period is one day).
 heatingTime: Heating Time is the duration of the cheapest hours within a Heating Period when the heating system is activated. or duration of heating in a day in case of internet connection failure.
@@ -64,17 +48,19 @@ let c = {
     higR: 300,      // KVS:AlwaysOffPrice VC:Heat Off (max price) (EUR/MWh)
     Inv: false,     // KVS:InvertedRelay VC:Inverted Relay
     rId: 0,         // KVS:RelayId VC: N/A, always first relay (0)
-    tmr: 60,        // KVS:Timer VC: N/A
     cnty: "ee",     // KVS:Country VC:Market Price Country (ee, fi, lv, lt)
     hCur: 0,        // KVS:HeatingCurve VC:Heating Curve 
-    pFac: 0.5,      // KVS: N/A VC: N/A
+    tmr: 60,        // Default timer
+    pFac: 0.5,      // Power factor
+    mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
 }
+/****** PROGRAM INITIAL SETTINGS ******/
+
 let s = {
     last: 0,        // KVS:LastCalculation Last calculation timestamp
     exSc: 0,        // KVS:ExistingSchedule Existing heating schedule
     vers: 0,        // KVS:Version
 }
-/****** PROGRAM INITIAL SETTINGS ******/
 
 /*
 Heating time dependency on heating curve and outside temperature for 24h and 12h (power factor 0.5).
@@ -123,10 +109,9 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.2,      //new script version
+    newV: 4.3,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
-
 };
 let cntr = 0;    //counter for async functions
 
@@ -233,7 +218,7 @@ function sAut() {
         Shelly.call('Script.SetConfig', { id: _.sId, config: { enable: true } },
             function (res, err, msg) {
                 if (err != 0) {
-                    print(_.pId, "Heating script autostart is not enabled.", msg, ". After Shelly restart, this script will not start and new heating schedules are not created.");
+                    print(_.pId, "Heating script autostart is not enabled.", msg);
                 }
             });
     }
@@ -242,7 +227,7 @@ function sAut() {
 // check if Shelly supports Virtual components
 function isVC() {
     const info = Shelly.getDeviceInfo();
-    return (info.gen === 3 || (info.gen === 2 && info.app.substring(0, 3) == "Pro")) && verC('1.4.3', info.ver);
+    return (info.gen === 3 || (info.gen === 2 && info.app.substring(0, 3) == "Pro")) && verC('1.4.3', info.ver) && !c.mnKv;
 }
 // compare Shelly FW versions
 function verC(old, newV) {
@@ -256,7 +241,7 @@ function verC(old, newV) {
     }
     return false;
 }
-// store KVS ConfigurationData data to memory
+// Get KVS ConfigurationData into memory
 function memC(dt) {
     c.tPer = dt.TimePeriod;
     c.hTim = dt.HeatingTime;
@@ -270,7 +255,7 @@ function memC(dt) {
     c.hCur = dt.HeatingCurve;
     return c;
 }
-// prepare ConfigurationData data to KVS store
+// ConfigurationData data to KVS store
 function kvsC() {
     let cdat = {};
     cdat.TimePeriod = c.tPer;
@@ -285,13 +270,13 @@ function kvsC() {
     cdat.HeatingCurve = c.hCur;
     return cdat;
 }
-// store KVS SystemData data to memory
+// Get KVS SystemData into memory
 function memS(dt) {
     s.exSc = dt.ExistingSchedule;
     s.vers = dt.Version;
     return s;
 }
-// prepare SystemData data to KVS store
+// SystemData data to KVS store
 function kvsS() {
     let sdat = {};
     sdat.LastCalculation = s.last;
@@ -302,7 +287,7 @@ function kvsS() {
 // Get KVS ConfigurationData and SystemData
 function gKvs() {
     cntr = 2;
-    Shelly.call('KVS.Get', { key: "ConfigurationData" + _.sId },
+    Shelly.call('KVS.Get', { key: "SmartHeatingConf" + _.sId },
         function (res, err) {
             cntr--;
             if (err !== 0) {
@@ -313,7 +298,7 @@ function gKvs() {
             _.cdOk = true;
         });
 
-    Shelly.call('KVS.Get', { key: "SystemData" + _.sId },
+    Shelly.call('KVS.Get', { key: "SmartHeatingSys" + _.sId },
         function (res, err) {
             cntr--;
             if (err !== 0) {
@@ -349,8 +334,8 @@ function inst() {
 
 // Store configuration data to KVS
 function tKvs() {
-    Shelly.call("KVS.set", { key: "ConfigurationData" + _.sId, value: JSON.stringify(kvsC()) },
-        function (res, err, msg, data) {
+    Shelly.call("KVS.set", { key: "SmartHeatingConf" + _.sId, value: JSON.stringify(kvsC()) },
+        function (res, err, msg) {
             if (err !== 0) {
                 console.log(_.pId, "Configuration not stored in KVS:", err, msg);
             } else {
@@ -368,7 +353,7 @@ function gVc() {
             if (res.components && res.components.length > 0) {
                 dVc(res.components); // Delete all Virtual Components
             } else {
-                aVc(dtVc()); // Add VCom and pass LazyLoad Virtual Components
+                aVc(dtVc()); // Add VCom and pass Virtual Components data
             }
         } else {
             print(_.pId, "Failed to get virtual components: " + msg);
@@ -397,7 +382,7 @@ function dVc(vCom) {
     if (vCom.length > 0) {
         Timer.set(1000, false, dVc, vCom);
     } else {
-        wait([aVc, dtVc()]); // add Virt Comp pass LazyLoad Virtual Components
+        wait([aVc, dtVc()]); 
     }
 }
 
@@ -535,7 +520,7 @@ function gFcs() {
     url = url + c.tPer + "&latitude=" + lat + "&longitude=" + lon;
     print(_.pId, "Forecast query: ", url)
     Shelly.call("HTTP.GET", { url: url, timeout: 5, ssl_ca: "*" }, function (res, err) {
-        url = null; //clear memory
+        url = null; 
         if (err != 0 || res === null || res.code != 200) {
             hErr("Get forecast HTTP.GET error, check again in " + _.freq / 60 + " min.");
             return;
@@ -545,7 +530,7 @@ function gFcs() {
         res = null;
         let sumT = 0;
         for (let i = 0; i < temp.length; i++) {
-            sumT += temp[i];        //sum all temperatures
+            sumT += temp[i];        
         }
 
         const tFcs = Math.ceil(sumT / c.tPer);      //AVG and round temperature up
@@ -560,7 +545,7 @@ function gFcs() {
         _.hTim = _.hTim > c.tPer ? c.tPer : _.hTim; //heating time can't be more than the period
 
         print(_.pId, "Temperture forecast width windchill is ", tFcs, " °C, and heating enabled for ", _.hTim, " hours.");
-        gEle(); //call elering
+        gEle(); 
     });
 }
 // Get electricity market price CSV file from Elering
@@ -581,17 +566,17 @@ function gEle() {
     print(_.pId, "Elering query: ", url);
 
     Shelly.call("HTTP.GET", { url: url, timeout: 5, ssl_ca: "*" }, function (res, err) {
-        url = null; //clear memory
+        url = null; 
         if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
             hErr("Elering HTTP.GET error, check again in " + _.freq / 60 + " min.");
             return;
         }
-        c.pack = eval("pack()." + c.pack);      //convert transfer fee to variable and Lazy Load the data
+        c.pack = eval("pack()." + c.pack);      //convert transfer fee to variable and load the data
 
         // Convert base64 to text and discard header
-        res.body_b64 = atob(res.body_b64);      //convert base64 to text
+        res.body_b64 = atob(res.body_b64);     
         let body = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
-        res = null; //clear memory
+        res = null; 
         let raw = [];
         let eler = [];
         let aPos = 0;
@@ -604,12 +589,12 @@ function gEle() {
                 break; // End of data
             }
             // Epoch
-            row[0] = Number(body.substring(aPos, body.indexOf("\"", aPos)));    //timestamp
+            row[0] = Number(body.substring(aPos, body.indexOf("\"", aPos))); 
             // Skip "; after timestamp
             aPos = body.indexOf("\"", aPos) + 2;
             // Price
-            aPos = body.indexOf(";\"", aPos) + 2; 
-            row[1] = Number(body.substring(aPos, body.indexOf("\"", aPos)).replace(",", "."));  //price
+            aPos = body.indexOf(";\"", aPos) + 2;
+            row[1] = Number(body.substring(aPos, body.indexOf("\"", aPos)).replace(",", "."));  
             row[1] += fFee(row[0]);     //add transfer fee
 
             raw.push(row);
@@ -624,7 +609,6 @@ function gEle() {
         _.tsPr = Math.floor(Date.now() / 1000.0);
         print(_.pId, "We got market prices from Elering ", new Date().toString());
 
-        //calculate schedules
         if (c.tPer <= 0) {
             // Calculate schedules based on alwaysOnLowPrice.
             for (let a = 0; a < raw.length; a++) {
@@ -657,7 +641,6 @@ function gEle() {
                     let ts = oneP[a][0];
                     let pric = oneP[a][1];
                     let fee = fFee(ts);
-                    // if the price - transferFee is less than the min price or the price - transferFee is not higher than the max price
                     if ((a < hHrs || pric - fee < c.lowR) && !(pric - fee > c.higR)) {
                         eler.push([new Date((ts) * 1000).getHours(), pric]);
                     }
@@ -667,11 +650,11 @@ function gEle() {
                 print(_.pId, "Current configuration does not permit heating during any hours; it is likely that the AlwaysOffPrice value is set too low.")
             }
         }
-        c.pack, raw = null; //clear memory
+        c.pack, raw = null; 
         _.manu = false;
         fTmr();     //set default timer
-        fdSc(eler); //delete existing schedule and pass elering data to create schedule
-        eler = null; //clear memory
+        fdSc(eler); //delete existing schedule and pass eler data to create schedule
+        eler = null; 
     });
 }
 
@@ -682,23 +665,23 @@ function gTz() {
     const utcH = shDt.toISOString().slice(11, 13);  //UTC hour
     let tz = shHr - utcH;                           //timezone offset
     if (tz > 12) { tz -= 24; }
-    if (tz < -12) { tz += 24; } 
+    if (tz < -12) { tz += 24; }
     return tz * 60 * 60;
 }
 
-// Calculate and return transfer fee based on the timestamp.
+// Calculate transfer fee based on the timestamp.
 function fFee(epoch) {
     const hour = new Date(epoch * 1000).getHours();
     const day = new Date(epoch * 1000).getDay();
     const mnth = new Date(epoch * 1000).getMonth();
     if (_.prov === "Elektlevi") {
-        if ((mnth >= 10 || mnth <= 2) && (day === 0 || day === 6) && hour >= 16 && hour < 20) { 
+        if ((mnth >= 10 || mnth <= 2) && (day === 0 || day === 6) && hour >= 16 && hour < 20) {
             // peak holiday: Nov-Mar, SA-SU at 16:00–20:00
             return c.pack.hMRt;
         } else if ((mnth >= 10 || mnth <= 2) && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
             // peak daytime: Nov-Mar: MO-FR at 09:00–12:00 and at 16:00–20:00
             return c.pack.dMRt;
-        } else if (day === 6 || day === 0 || hour < 7 || hour >= 22) {
+        } else if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
             //night-time: MO-FR at 22:00–07:00, SA-SU all day
             return c.pack.nRt;
         } else {
@@ -707,7 +690,7 @@ function fFee(epoch) {
         }
     } else if (_.prov === "Imatra") {
         if (gTz() / 60 / 60 === 3) { //summer time
-            if (day === 6 || day === 0 || hour < 8) {
+            if (hour < 8 || day === 6 || day === 0) {
                 //summer-night-time: MO-FR at 00:00–08:00, SA-SU all day
                 return c.pack.nRt;
             } else {
@@ -715,22 +698,22 @@ function fFee(epoch) {
                 return c.pack.dRt;
             }
         } else {
-            if (day === 6 || day === 0 || hour < 7 || hour >= 23) {
+            if (hour < 7 || hour >= 23 || day === 6 || day === 0) {
                 //winter-night-time: MO-FR at 23:00–07:00, SA-SU all day
                 return c.pack.nRt;
             } else {
-                //daytime> MO-FR at 07:00–23:00
+                //daytime: MO-FR at 07:00–23:00
                 return c.pack.dRt;
             }
         }
     } else {
         return 0;
-    }   
+    }
 }
 
 // Set countdown timer to flip Shelly status
 function fTmr() {
-    const timr = c.tmr * 60 + 2; //time in seconds, +2sec to remove flap between continous heating hours
+    const timr = c.tmr * 60 + 2; //+2sec to remove flap between continous heating hours
     Shelly.call("Switch.SetConfig", {
         id: c.rId,
         config: {
@@ -753,13 +736,12 @@ function fdSc(eler) {
 // Create a new schedule with the advanced timespec to cover all the hours within the same schedule item
 function fScd(eler) {
     cntr = 1;
-    // Check if there are any heating hours
     if (eler === undefined || eler.length == 0) {
         print(_.pId, "No heating calculated for any hours with the current configuration.")
         fKvs();
         return;
     }
-    // Sort the heating hours by hour, it is needed only for console.log
+    // Sort the heating by hour
     let sArr = srAr(eler, 0);
     eler = [];
     _.scId = 0;
@@ -771,8 +753,8 @@ function fScd(eler) {
         let t = hr < 10 ? "0" + hr : hr;
         pArr.push(t + ":00 (" + sArr[i][1] + ")");
     }
-    const hrs = hArr.join(","); //create timespec
-    const pric = pArr.join(", "); //create hours (prices) only for console.log
+    const hrs = hArr.join(",");     //create timespec
+    const pric = pArr.join(", ");   //create hours (prices) for print
     Shelly.call("Schedule.Create", {
         enable: true,
         timespec: "0 0 " + hrs + " * * *",
@@ -801,11 +783,11 @@ function fKvs() {
     s.last = new Date().toString();
     s.exSc = _.scId;
     s.vers = _.newV;
-    Shelly.call("KVS.set", { key: "SystemData" + _.sId, value: JSON.stringify(kvsS()) },
+    Shelly.call("KVS.set", { key: "SmartHeatingSys" + _.sId, value: JSON.stringify(kvsS()) },
         function () {
             cntr--;
         });
-    s.last = null;   //clear memory
+    s.last = null;  
     print(_.pId, "Script v", _.newV, (_.scId > 0 ? " created a schedule with ID:" + _.scId : "") + ", next heating calculation at", nxHr(1) + (_.updD < 10 ? ":0" : ":") + _.updD);
     wait(f_Wd);
 }
@@ -817,7 +799,6 @@ function fMan() {
     }
     _.manu = true;
 
-    // create schedule for the historical cheap hours manually
     let chpH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 18, 19, 20];
     let eler = [];
     for (let i = 0; i < _.cPer; i++) {                  //create schedule for each period
@@ -834,7 +815,6 @@ function fMan() {
 
 // Shelly doesnt support Javascript sort function so this basic math algorithm will do the sorting job
 function srAr(arr, sort) {
-    // Sorting array from smallest to larger
     let i, j, k, min, max, minX, maxX, tmp;
     j = arr.length - 1;
     for (i = 0; i < j; i++) {
@@ -875,7 +855,7 @@ function hErr(msg) {
 }
 // Wait for the RPC calls to be completed before starting next function.
 function wait(data) {
-    if (cntr !== 0) {   
+    if (cntr !== 0) {
         Timer.set(1000, false, wait, data);
         return;
     }
@@ -928,7 +908,6 @@ let isTm = false;   //check if Shelly has time
 let t_hd;           //timer handle
 let t_ct = 0;       //time counter
 let lNot = true;    //loop notification
-// Check if Shelly has time
 function fcTm() {
     const epch = Shelly.getComponentStatus("sys").unixtime;
     if (epch > 0) {
@@ -936,13 +915,13 @@ function fcTm() {
         Timer.clear(t_hd);
         isTm = true;
         print(_.pId, "Shelly has time ", new Date(epch * 1000));
-        //start the main loop with a random delay (0-10 sec) to avoid the same starting time for concurrent instances
-        Timer.set(Math.floor(Math.random() * 10) * 1000, false, loop);
+        //start the main loop with a random delay (0-5 sec) to avoid the same starting time for concurrent instances
+        Timer.set(Math.floor(Math.random() * 5) * 1000, false, loop);
     } else {
         t_ct++;
         print(_.pId, "Shelly has no time", t_ct, "seconds. We wait for the time to be set.");
         if (t_ct > 30 && lNot) {
-            loop(); //start the main loop without a time and it goes to manual mode
+            loop(); //start the main loop if the time is not set in 30 seconds
             lNot = false;
         }
         return;
@@ -965,24 +944,24 @@ function f_Wd() {
             }
             /** Create a new script (id==0) or stop the existing script (id<>0) if watchdog found. */
             if (id === 0) {
-                Shelly.call('Script.Create', { name: "watchdog" }, putC, { id: id });   //create a new watchdog script
+                Shelly.call('Script.Create', { name: "watchdog" }, putC, { id: id });   //create a new watchdog 
             } else {
-                Shelly.call('Script.Stop', { id: id }, putC, { id: id });               //stop the existing watchdog script
+                Shelly.call('Script.Stop', { id: id }, putC, { id: id });               //stop the existing watchdog 
             }
         }
     });
 }
 
-// Add code to the watchdog script
+// Add code to the watchdog
 function putC(res, err, msg, data) {
     if (err !== 0) {
         print(_.pId, "Watchdog script not created:", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
     } else {
-        let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SystemData"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SystemData"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,strt())}));'
+        let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SmartHeatingSys"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SmartHeatingSys"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,strt())}));'
         const id = res.id > 0 ? res.id : data.id;   //get the script ID
         Shelly.call('Script.PutCode', { id: id, code: code }, function (res, err, msg, data) {
             if (err === 0) {
-                a_St(data.id); //enable autostart and then start the watchdog script
+                a_St(data.id); 
             } else {
                 print(_.pId, "Code is not added to the script:", msg, ". Schedule will notbe deleted if heating script is stopped or deleted.")
             }
@@ -990,7 +969,7 @@ function putC(res, err, msg, data) {
     }
 }
 
-// Enable autostart for the watchdog script
+// Enable autostart for the watchdog
 function a_St(sId) {
     if (!Shelly.getComponentConfig("script", sId).enable) {
         Shelly.call('Script.SetConfig', { id: sId, config: { enable: true } }, function (res, err, msg) {
@@ -999,11 +978,9 @@ function a_St(sId) {
             }
         });
     }
-    // Start the watchdog script
+    // Start the watchdog
     Shelly.call('Script.Start', { id: sId }, function (res, err, msg) {
         if (err === 0) {
-            print(_.pId, "Memory used:", Shelly.getComponentStatus("script", _.sId).mem_used, "Memory peak:", Shelly.getComponentStatus("script", _.sId).mem_peak); //print the current script memory usage
-
             print(_.pId, "Watchdog script created and started successfully.");
         } else {
             print(_.pId, "Watchdog script is not started.", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
@@ -1013,6 +990,5 @@ function a_St(sId) {
 }
 /*  ---------  WATCHDOG END  ---------   */
 
-//start 1 sec loop-timer to check Shelly time during device boot
 t_hd = Timer.set(1000, true, fcTm);     //start the Shelly timecheck timer
 Timer.set(_.freq * 1000, true, loop);   //start the main loop with a frequency of 5 minutes

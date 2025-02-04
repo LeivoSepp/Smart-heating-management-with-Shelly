@@ -109,7 +109,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.3,      //new script version
+    newV: 4.4,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -253,6 +253,7 @@ function memC(dt) {
     c.rId = dt.RelayId;
     c.cnty = dt.Country;
     c.hCur = dt.HeatingCurve;
+    c.mnKv = typeof dt.ManualKVS === "boolean" ? dt.ManualKVS : c.mnKv;
     return c;
 }
 // ConfigurationData data to KVS store
@@ -268,6 +269,7 @@ function kvsC() {
     cdat.RelayId = c.rId;
     cdat.Country = c.cnty;
     cdat.HeatingCurve = c.hCur;
+    cdat.ManualKVS = c.mnKv;
     return cdat;
 }
 // Get KVS SystemData into memory
@@ -322,13 +324,8 @@ function inst() {
             gVc();
         }
     } else {
-        if (_.cdOk && _.sdOk) {
-            print(_.pId, "Existing KVS mode");
-            main();
-        } else {
-            print(_.pId, "New KVS mode installation");
-            tKvs();
-        }
+        print(_.pId, "Script in KVS mode");
+        tKvs();
     }
 }
 
@@ -382,7 +379,7 @@ function dVc(vCom) {
     if (vCom.length > 0) {
         Timer.set(1000, false, dVc, vCom);
     } else {
-        wait([aVc, dtVc()]); 
+        wait([aVc, dtVc()]);
     }
 }
 
@@ -520,7 +517,7 @@ function gFcs() {
     url = url + c.tPer + "&latitude=" + lat + "&longitude=" + lon;
     print(_.pId, "Forecast query: ", url)
     Shelly.call("HTTP.GET", { url: url, timeout: 5, ssl_ca: "*" }, function (res, err) {
-        url = null; 
+        url = null;
         if (err != 0 || res === null || res.code != 200) {
             hErr("Get forecast HTTP.GET error, check again in " + _.freq / 60 + " min.");
             return;
@@ -530,7 +527,7 @@ function gFcs() {
         res = null;
         let sumT = 0;
         for (let i = 0; i < temp.length; i++) {
-            sumT += temp[i];        
+            sumT += temp[i];
         }
 
         const tFcs = Math.ceil(sumT / c.tPer);      //AVG and round temperature up
@@ -545,7 +542,7 @@ function gFcs() {
         _.hTim = _.hTim > c.tPer ? c.tPer : _.hTim; //heating time can't be more than the period
 
         print(_.pId, "Temperture forecast width windchill is ", tFcs, " °C, and heating enabled for ", _.hTim, " hours.");
-        gEle(); 
+        gEle();
     });
 }
 // Get electricity market price CSV file from Elering
@@ -566,7 +563,7 @@ function gEle() {
     print(_.pId, "Elering query: ", url);
 
     Shelly.call("HTTP.GET", { url: url, timeout: 5, ssl_ca: "*" }, function (res, err) {
-        url = null; 
+        url = null;
         if (err != 0 || res === null || res.code != 200 || !res.body_b64) {
             hErr("Elering HTTP.GET error, check again in " + _.freq / 60 + " min.");
             return;
@@ -574,9 +571,9 @@ function gEle() {
         c.pack = eval("pack()." + c.pack);      //convert transfer fee to variable and load the data
 
         // Convert base64 to text and discard header
-        res.body_b64 = atob(res.body_b64);     
+        res.body_b64 = atob(res.body_b64);
         let body = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
-        res = null; 
+        res = null;
         let raw = [];
         let eler = [];
         let aPos = 0;
@@ -589,12 +586,12 @@ function gEle() {
                 break; // End of data
             }
             // Epoch
-            row[0] = Number(body.substring(aPos, body.indexOf("\"", aPos))); 
+            row[0] = Number(body.substring(aPos, body.indexOf("\"", aPos)));
             // Skip "; after timestamp
             aPos = body.indexOf("\"", aPos) + 2;
             // Price
             aPos = body.indexOf(";\"", aPos) + 2;
-            row[1] = Number(body.substring(aPos, body.indexOf("\"", aPos)).replace(",", "."));  
+            row[1] = Number(body.substring(aPos, body.indexOf("\"", aPos)).replace(",", "."));
             row[1] += fFee(row[0]);     //add transfer fee
 
             raw.push(row);
@@ -650,11 +647,11 @@ function gEle() {
                 print(_.pId, "Current configuration does not permit heating during any hours; it is likely that the AlwaysOffPrice value is set too low.")
             }
         }
-        c.pack, raw = null; 
+        c.pack, raw = null;
         _.manu = false;
         fTmr();     //set default timer
         fdSc(eler); //delete existing schedule and pass eler data to create schedule
-        eler = null; 
+        eler = null;
     });
 }
 
@@ -787,7 +784,7 @@ function fKvs() {
         function () {
             cntr--;
         });
-    s.last = null;  
+    s.last = null;
     print(_.pId, "Script v", _.newV, (_.scId > 0 ? " created a schedule with ID:" + _.scId : "") + ", next heating calculation at", nxHr(1) + (_.updD < 10 ? ":0" : ":") + _.updD);
     wait(f_Wd);
 }
@@ -961,7 +958,7 @@ function putC(res, err, msg, data) {
         const id = res.id > 0 ? res.id : data.id;   //get the script ID
         Shelly.call('Script.PutCode', { id: id, code: code }, function (res, err, msg, data) {
             if (err === 0) {
-                a_St(data.id); 
+                a_St(data.id);
             } else {
                 print(_.pId, "Code is not added to the script:", msg, ". Schedule will notbe deleted if heating script is stopped or deleted.")
             }

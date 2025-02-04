@@ -7,7 +7,7 @@ Shelly.addStatusHandler(function (res) {
     }
 });
 function strt() {
-    Shelly.call('KVS.Get', { key: "SystemData" + scId },
+    Shelly.call('KVS.Get', { key: "SmartHeatingSys" + scId },
         function (res) {
             if (res) {
                 delS(JSON.parse(res.value));
@@ -25,6 +25,6 @@ function delS(sDat) {
 }
 function updK(sDat) {
     sDat.ExistingSchedule = 0;
-    Shelly.call("KVS.set", { key: "SystemData" + scId, value: JSON.stringify(sDat) },);
+    Shelly.call("KVS.set", { key: "SmartHeatingSys" + scId, value: JSON.stringify(sDat) },);
 }
 

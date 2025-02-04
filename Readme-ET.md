@@ -28,6 +28,7 @@
   - [Kuidas skript töötab](#kuidas-skript-töötab)
   - [Oluline teada](#oluline-teada)
   - [Testitud rikkestsenaariumid](#testitud-rikkestsenaariumid)
+- [Maasoojuspumpade Thermia Villa \& Eko Classic nutikas kütmine Shelly abil](#maasoojuspumpade-thermia-villa--eko-classic-nutikas-kütmine-shelly-abil)
 - [Nutikad kütte algoritmid](#nutikad-kütte-algoritmid)
   - [Ilmaprognoosi algoritm](#ilmaprognoosi-algoritm)
     - [Ilmaprognoosipõhise kütmise eelised](#ilmaprognoosipõhise-kütmise-eelised)
@@ -318,6 +319,39 @@ Internetirikke korral jagab Shelly oma küttetunnid vastavalt häälestatud peri
 5. Eleringi API tagastab valed andmed ja hinnad puuduvad.
 6. Ilmaprognoosi HTTP viga tekib ja server pole saadaval.
 7. Ilmaprognoosi API teenuse viga tekib ja JSON andmeid ei saada.
+
+# Maasoojuspumpade Thermia Villa & Eko Classic nutikas kütmine Shelly abil
+
+Thermia Villa ja Thermia Eko Classic on küll suhteliselt vanad, kuid siiski hästi tööötavad ja päris populaarsed maasoojuspumbad. 
+Käesolev juhis nõustab kuidas need soojuspumbad Shelly abil nutikalt kütma panna.
+
+Instruktsioonid ja ühendused  
+(Esiteks mõlema soojuspumba installer manualist pilt.)
+
+|Thermia Villa|Thermia Eko Classic|
+|---|---|
+| <img src="images/ThermiaVilla.jpg" alt="Thermia Villa" width="450"> | <img src="images/ThermiaEkoClassic.jpg" alt="Thermia Eko Classic" width="410"> |
+
+Ühenda **kaks Shelly seadet** maasoojuspumba sees vastavalt **skeemile**.
+
+ <img src="images/ThermiaShelly.jpg" alt="Connect Thermia and Shelly" width="500">
+
+Alljärgnevast tabelist leiad kuidas **häälestada oma Shelly seadmed**.  
+Mõlemale Shelly seadmele installeeri Smart Heating skript ja häälesta vastavalt kas kütte või sooja vee tootmise jaoks.
+
+|Heatpump|Heating+Hot Water|only Hot Water|
+|---|---|---|
+|Thermia Villa|Shelly 1<br>``"InvertedRelay": true``|Shelly 2<br>``"InvertedRelay": true``|
+|Thermia Eko Classic|Shelly 1<br>``"InvertedRelay": true``|Shelly 2<br>``"InvertedRelay": false``|
+
+Siin on **soojuspumba tööolukorrad** lihtsalt infoks.
+
+|Thermia Villa|Thermia Eko Classic|Shelly 1|Shelly 2|
+|---|---|---|---|
+|EVU Stop <br>No heating or hot water|Hot water <br> Reduced Temperatur|On|On|
+|Hot Water<br> Reduced Temperatur|EVU Stop<br>No heating or Hot water|On|Off|
+|Normal heating <br>Normal Hot water|Normal heating <br>Normal Hot water|Off|On|
+|Normal heating <br>Normal Hot water|Normal heating <br>Normal Hot water|Off|Off|
 
 # Nutikad kütte algoritmid
 

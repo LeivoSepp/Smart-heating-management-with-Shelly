@@ -28,6 +28,7 @@
   - [How the Script Operates](#how-the-script-operates)
   - [Important To Know](#important-to-know)
   - [Tested Failure Scenarios](#tested-failure-scenarios)
+- [Smart Heating for Thermia Villa \& Eko Classic Using Shelly](#smart-heating-for-thermia-villa--eko-classic-using-shelly)
 - [Smart Heating Algorithms](#smart-heating-algorithms)
   - [Weather Forecast Algorithm](#weather-forecast-algorithm)
     - [Advantages of Weather Forecast-Based Heating](#advantages-of-weather-forecast-based-heating)
@@ -333,6 +334,39 @@ In error mode, Shelly divides the heating time bsaed on the configured periods.
 5. Elering API returns incorrect data, and prices are missing.
 6. Weather forecast HTTP error occurs, and the server is unavailable.
 7. Weather forecast API service error occurs, and the JSON data is not received.
+
+# Smart Heating for Thermia Villa & Eko Classic Using Shelly
+
+Thermia Villa and Thermia Eko Classic are two old but still widely used ground heating systems.  
+This guide explains how to make these heat pumps smart using two Shelly devices.
+
+Step-by-Step Instructions  
+(Including installer manual screenshots for reference.)
+
+|Thermia Villa|Thermia Eko Classic|
+|---|---|
+| <img src="images/ThermiaVilla.jpg" alt="Thermia Villa" width="450"> | <img src="images/ThermiaEkoClassic.jpg" alt="Thermia Eko Classic" width="410"> |
+
+Connect **two Shelly devices** inside the heat pump following the **schema below**.
+
+ <img src="images/ThermiaShelly.jpg" alt="Connect Thermia and Shelly" width="500">
+
+Refer to the table below for **configuring the Shelly devices**.  
+Both Shelly devices must have Smart Heating script. Configure them according to heating or hot water production.
+
+|Heatpump|Heating+Hot Water|only Hot Water|
+|---|---|---|
+|Thermia Villa|Shelly 1<br>``"InvertedRelay": true``|Shelly 2<br>``"InvertedRelay": true``|
+|Thermia Eko Classic|Shelly 1<br>``"InvertedRelay": true``|Shelly 2<br>``"InvertedRelay": false``|
+
+Below is the **heat pump operating guide** for reference.
+
+|Thermia Villa|Thermia Eko Classic|Shelly 1|Shelly 2|
+|---|---|---|---|
+|EVU Stop <br>No heating or hot water|Hot water <br> Reduced Temperatur|On|On|
+|Hot Water<br> Reduced Temperatur|EVU Stop<br>No heating or Hot water|On|Off|
+|Normal heating <br>Normal Hot water|Normal heating <br>Normal Hot water|Off|On|
+|Normal heating <br>Normal Hot water|Normal heating <br>Normal Hot water|Off|Off|
 
 # Smart Heating Algorithms
 

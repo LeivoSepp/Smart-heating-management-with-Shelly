@@ -63,7 +63,7 @@ Skripti loodud küttetundide vaatamiseks:
 |-|-| 
 |<img src="images/oneschedule.jpg" alt="Open Schedule" width="200">|<img src="images/editschedule.jpg" alt="Open Schedule" width="200">| 
 
-> [!TIP] Kuidas ajakava käsitsi muuta 
+> [!TIP] 
 > Saate ajakava käsitsi muuta, klõpsates mis tahes tunnil, et see lisada või eemaldada, seejärel klõpsake Next &rarr; Next &rarr; Save.  
 > Järgmine kord kui skript arvutab uue ajakava, kirjutatakse kõik käsitsi loodudmuudatused üle. 
 
@@ -194,12 +194,13 @@ Vaadake kütte kõvera mõju kütte aja sõltuvusgraafikutele: [kütteaja sõltu
 6. Klõpsake nuppu "Create Script" 
 1. Avage skripti veebileht [Githubis](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
 2. Klõpsake nuppu "Copy raw file". Nüüd on skript teie lõikelauamälus.  
+
 <img src="images/CopyCode.jpg" alt="Insert code" width="450">
 
-6. Kleepige kood lõikelaualt skripti aknasse **Ctrl+V**.
-13. Nimetage skript näiteks "Küte 24h-Ilmaprognoos" ja salvestage.
-14. Kui salvestamisprotsess on lõpule viidud, klõpsake "Start".
-15. Skripti parameetrite konfigureerimine
+1. Kleepige kood lõikelaualt skripti aknasse **Ctrl+V**.
+2.  Nimetage skript näiteks "Küte 24h-Ilmaprognoos" ja salvestage.
+3.  Kui salvestamisprotsess on lõpule viidud, klõpsake "Start".
+4.  Skripti parameetrite konfigureerimine
     - [Shelly Virtual Component kasutamine](#shelly-rakenduse-kasutamine)
     - [Shelly KVS-i kasutamine](#shelly-kvs-i-kasutamine)
 
@@ -305,8 +306,6 @@ flowchart TD
 * <p>Shelly Gen2 Plus seadmete püsivara peab olema versioon 1.4.4 või uuem. KVS andmed on kirjutuskaitstud, kui püsivara versioon on 1.4.3 või vanem.
 * <p>Shelly Gen2 Pro või Gen3 seadmete püsivara peab olema versioon 1.4.4 või uuem. Skript ei installi virtuaalseid komponente, kui püsivara versioon on 1.4.3 või vanem.
 
-<br>
-
 ## Testitud rikkestsenaariumid
 Alltoodud rikete ajal kasutab Shelly ``Heating Time`` kestust, et lülitada küte ajalooliselt odavamate tundide järgi sisse.  
 Internetirikke korral jagab Shelly oma küttetunnid vastavalt häälestatud perioodide vahel.
@@ -324,8 +323,9 @@ Internetirikke korral jagab Shelly oma küttetunnid vastavalt häälestatud peri
 
 ## Ilmaprognoosi algoritm
 
-> [!TIP] Ilmaprognoosi alusel kütmine
-> See algoritm arvutab järgmise päeva kütteaja ilmaprognooside põhjal. See on eriti tõhus erinevate koduküttesüsteemide jaoks, sealhulgas suure veepaagiga süsteemid, mis suudavad soojusenergiat säilitada. See lähenemine optimeerib energiakasutust, joondades küttevajadused eeldatavate ilmastikuoludega.
+> [!TIP] 
+> See algoritm arvutab järgmise päeva kütteaja ilmaprognooside põhjal.  
+> See on eriti tõhus erinevate koduküttesüsteemide jaoks, kuna optimeerib küttevajaduse eeldatavate ilmastikuoludega.
 
 ### Ilmaprognoosipõhise kütmise eelised
 

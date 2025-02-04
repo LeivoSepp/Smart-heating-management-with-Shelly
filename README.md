@@ -72,8 +72,8 @@ To view the heating hours created by the script:
 |<img src="images/oneschedule.jpg" alt="Open Schedule" width="200">|<img src="images/editschedule.jpg" alt="Open Schedule" width="200">|
 
 
-> [!TIP] How to edit schedule manually
-You can manually override the schedule by clicking on any hour to include or exclude it for a specific day, then lick Next &rarr; Next &rarr; Save.  
+> [!TIP] 
+> You can manually override the schedule by clicking on any hour to include or exclude it for a specific day, then lick Next &rarr; Next &rarr; Save.  
 > The next time the script calculates a new schedule, it will generate a fresh schedule with the updated timespec.
 
 **How to monitor script execution**  
@@ -248,19 +248,20 @@ let c = {
 ## Updating Script
 
 > [!WARNING] 
-> Direct upgrade from script version 4.1 to a newer version is not supported due to a change in KVS data format to JSON.
+> Direct upgrade from script version 4.1 to a newer version is not supported due to a change in KVS data format to JSON.  
 > After installation, you must reconfigure all settings either in KVS or via Virtual Components.
 
 1. Open script from the [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
 2. Click the button "Copy raw file". Now the script is in your clipboard memory.
+
 <img src="images/CopyCode.jpg" alt="Insert code" width="450">
 
-3. Access the Shelly device web page: Navigate to Settings → Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open; on the left menu, select "<> Scripts."
-4. Open the script you wish to update.
-5. Select all script code and delete it **Ctrl+A** &rarr; **Delete**. 
-6. Paste the code from the clipboard to the script window **Ctrl+V**.
-7. Save the script, the version is now updated. 
-8. All configurations remain unchanged, as they are stored in KVS or Virtual Components.
+1. Access the Shelly device web page: Navigate to Settings → Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open; on the left menu, select "<> Scripts."
+2. Open the script you wish to update.
+3. Select all script code and delete it **Ctrl+A** &rarr; **Delete**. 
+4. Paste the code from the clipboard to the script window **Ctrl+V**.
+5. Save the script, the version is now updated. 
+6. All configurations remain unchanged, as they are stored in KVS or Virtual Components.
 
 ## How to Verify Script Execution
 
@@ -337,8 +338,9 @@ In error mode, Shelly divides the heating time bsaed on the configured periods.
 
 ## Weather Forecast Algorithm
 
-> [!TIP]Weather Forecast
-> This algorithm calculates the heating time for the next day based on weather forecasts. It is particularly effective for various home heating systems, including those with substantial water tanks capable of retaining thermal energy. This approach optimizes energy usage by aligning heating needs with anticipated weather conditions.
+> [!TIP]
+> This algorithm calculates the heating time for the next day based on weather forecasts.  
+> It is particularly effective for various home heating systems. This approach optimizes energy usage by aligning heating needs with anticipated weather conditions.
 
 ### Advantages of Weather Forecast-Based Heating
 

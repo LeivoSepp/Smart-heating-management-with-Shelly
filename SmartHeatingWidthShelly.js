@@ -109,7 +109,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.4,      //new script version
+    newV: 4.5,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -147,7 +147,7 @@ function dtVc() {
                 options: ["NONE", "VORK1", "VORK2", "VORK4", "VORK5", "PARTN24", "PARTN24PL", "PARTN12", "PARTN12PL"],
                 default_value: "VORK2",
                 persisted: true,
-                meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Base", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak", "Partner24": "Partner24 Base", "Partner24Plus": "Partner24Plus Base", "Partner12": "Partner12 DayNight", "Partner12Plus": "Partner12Plus DayNight" } } }
+                meta: { ui: { view: "dropdown", webIcon: 22, titles: { "NONE": "No package", "VORK1": "Võrk1 Base", "VORK2": "Võrk2 DayNight", "VORK4": "Võrk4 DayNight", "VORK5": "Võrk5 DayNightPeak", "PARTN24": "Partner24 Base", "PARTN24PL": "Partner24Plus Base", "PARTN12": "Partner12 DayNight", "PARTN12PL": "Partner12Plus DayNight" } } }
             }
         },
         {
@@ -199,8 +199,8 @@ function dtVc() {
             type: "number", id: 203, config: {
                 name: "Forecast Impact +/-",
                 default_value: 0,
-                min: -6,
-                max: 6,
+                min: -4,
+                max: 8,
                 persisted: true,
                 meta: { ui: { view: "slider", unit: "h more heat" } }
             }
@@ -434,54 +434,38 @@ function sGrp() {
 
 // Read all virtual components and store the values to memory
 function rVc() {
+    cntr++;
+    let mpVC = [
+        ["tPer", "enum:200"],
+        ["hTim", "number:200"],
+        ["isFc", "boolean:200"],
+        ["pack", "enum:201"],
+        ["lowR", "number:201"],
+        ["higR", "number:202"],
+        ["Inv", "boolean:201"],
+        ["cnty", "enum:202"],
+        ["hCur", "number:203"],
+    ];
     Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] },
-        function (res, err, msg) {
+        function (res, err) {
             if (err === 0) {
                 let comp = res.components;
                 res = null;
                 if (comp && comp.length > 0) {
-                    for (let i in comp) {
-                        let val = comp[i].status.value;
-                        switch (comp[i].key) {
-                            case "enum:200":
-                                c.tPer = JSON.parse(val);
+                    for (let i = 0; i < mpVC.length; i++) {
+                        for (let j = 0; j < comp.length; j++) {
+                            if (mpVC[i][1] === comp[j].key) {
+                                c[mpVC[i][0]] = comp[j].status.value;
                                 break;
-                            case "number:200":
-                                c.hTim = JSON.parse(val);
-                                break;
-                            case "boolean:200":
-                                c.isFc = JSON.parse(val);
-                                break;
-                            case "enum:201":
-                                c.pack = val;
-                                break;
-                            case "number:201":
-                                c.lowR = JSON.parse(val);
-                                break;
-                            case "number:202":
-                                c.higR = JSON.parse(val);
-                                break;
-                            case "boolean:201":
-                                c.Inv = JSON.parse(val);
-                                break;
-                            case "enum:202":
-                                c.cnty = val;
-                                break;
-                            case "number:203":
-                                c.hCur = JSON.parse(val);
-                                break;
-                            default:
-                                break;
+                            }
                         }
                     }
-                    wait(main);
-                } else {
-                    print(_.pId, "No virtual components found");
+
                 }
-            } else {
-                print(_.pId, "Couldn't get virtual components: " + msg);
             }
+            cntr--;
         });
+    wait(main);
 }
 
 // Main script where all the logic starts.
@@ -592,8 +576,7 @@ function gEle() {
             // Price
             aPos = body.indexOf(";\"", aPos) + 2;
             row[1] = Number(body.substring(aPos, body.indexOf("\"", aPos)).replace(",", "."));
-            row[1] += fFee(row[0]);     //add transfer fee
-
+            row[1] += fFee(row[0]);
             raw.push(row);
             aPos = body.indexOf("\n", aPos);
         }
@@ -979,6 +962,9 @@ function a_St(sId) {
     Shelly.call('Script.Start', { id: sId }, function (res, err, msg) {
         if (err === 0) {
             print(_.pId, "Watchdog script created and started successfully.");
+            print("// Memory Used:", Shelly.getComponentStatus("script", Shelly.getCurrentScriptId()).mem_used,
+                "Peak:", Shelly.getComponentStatus("script", Shelly.getCurrentScriptId()).mem_peak);
+
         } else {
             print(_.pId, "Watchdog script is not started.", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
         }

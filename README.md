@@ -204,7 +204,7 @@ Check heating curve impact for [heating time dependency graphs](https://github.c
 
 5. Open the Shelly device web page: Click Settings &rarr; Device Information &rarr; Device IP &rarr; click on the IP address. The Shelly device web page will open, on the left menu click "<> Scripts".
 6. Click the "Create Script".
-7. Open script from the [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
+7. Open script from the [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js).
 8. Click the button "Copy raw file". Now the script content is in your clipboard memory.  
 <img src="images/CopyCode.jpg" alt="Insert code" width="450">
 
@@ -252,7 +252,7 @@ let c = {
 > Direct upgrade from script version 4.1 to a newer version is not supported due to a change in KVS data format to JSON.  
 > After installation, you must reconfigure all settings either in KVS or via Virtual Components.
 
-1. Open script from the [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
+1. Open script from the [Github](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js).
 2. Click the button "Copy raw file". Now the script is in your clipboard memory.
 
 <img src="images/CopyCode.jpg" alt="Insert code" width="450">

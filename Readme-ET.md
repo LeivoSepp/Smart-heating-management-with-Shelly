@@ -193,7 +193,7 @@ Vaadake kütte kõvera mõju kütte aja sõltuvusgraafikutele: [kütteaja sõltu
 2. Ühendage Shelly seade oma isiklikku WiFi võrku. [Shelly veebiliidese juhendid](https://kb.shelly.cloud/knowledge-base/web-interface-guides).
 5. Avage Shelly seadme veebileht: Klõpsake Settings &rarr; Device Information &rarr; Device IP &rarr; klõpsake IP-aadressil. Avaneb Shelly seadme veebileht, vasakpoolses menüüs klõpsake "<> Scripts".
 6. Klõpsake nuppu "Create Script" 
-1. Avage skripti veebileht [Githubis](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
+1. Avage skripti veebileht [Githubis](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js).
 2. Klõpsake nuppu "Copy raw file". Nüüd on skript teie lõikelauamälus.  
 
 <img src="images/CopyCode.jpg" alt="Insert code" width="450">
@@ -243,7 +243,7 @@ let c = {
 > Versioonilt 4.1 ei ole uuendamine võimalik, kuna KVS andmevorming on uuemates versioonides JSON.  
 > Peale intallatsiooni, on vaja häälestused käsitsi üle käia nii Virtual Komponentide kui ka KVS-i puhul.
 
-1. Avage skripti veebileht [Githubis](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/v3.2/SmartHeatingWidthShelly.js).
+1. Avage skripti veebileht [Githubis](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly/blob/master/SmartHeatingWidthShelly.js).
 2. Klõpsake nuppu "Copy raw file". Nüüd on skript teie lõikelauamälus.  
 3. Avage Shelly seadme veebilehelt: navigeerige Settings → Device Information &rarr; Device IP &rarr; klõpsake IP-aadressil. Avaneb Shelly seadme veebileht; vasakpoolses menüüs valige "<> Scripts."
 4. Avage skript, mida soovite uuendada.

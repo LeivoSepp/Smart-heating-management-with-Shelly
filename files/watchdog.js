@@ -2,7 +2,7 @@
 let scId = 0;
 Shelly.addStatusHandler(function (res) {
     if (res.name === 'script' && !res.delta.running) {
-        scId = res.delta.id;
+        scId = res.id;
         strt();
     }
 });

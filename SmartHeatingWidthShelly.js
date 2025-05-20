@@ -109,7 +109,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.5,      //new script version
+    newV: 4.6,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -937,7 +937,7 @@ function putC(res, err, msg, data) {
     if (err !== 0) {
         print(_.pId, "Watchdog script not created:", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
     } else {
-        let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SmartHeatingSys"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SmartHeatingSys"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.delta.id,strt())}));'
+        let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SmartHeatingSys"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SmartHeatingSys"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.id,strt())}));'
         const id = res.id > 0 ? res.id : data.id;   //get the script ID
         Shelly.call('Script.PutCode', { id: id, code: code }, function (res, err, msg, data) {
             if (err === 0) {

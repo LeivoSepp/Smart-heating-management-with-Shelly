@@ -53,6 +53,7 @@ let c = {
     tmr: 60,        // Default timer
     pFac: 0.5,      // Power factor
     mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
+    minH: 0,        // KVS:MinHeatingTime VC:Min Heat (h/period)  <-- uus
 }
 /****** PROGRAM INITIAL SETTINGS ******/
 
@@ -171,14 +172,6 @@ function dtVc() {
             }
         },
         {
-            type: "boolean", id: 201, config: {
-                name: "Inverted Relay",
-                default_value: false,
-                persisted: true,
-                meta: { ui: { view: "toggle", webIcon: 7, titles: ["No", "Yes"] } }
-            }
-        },
-        {
             type: "enum", id: 202, config: {
                 name: "Market Price Country",
                 options: ["ee", "fi", "lv", "lt"],
@@ -205,6 +198,17 @@ function dtVc() {
                 meta: { ui: { view: "slider", unit: "h more heat" } }
             }
         },
+        // --- UUS VIRTUAALKOMPONENT: miinimum kütteaeg perioodi kohta ---
+        {
+            type: "number", id: 204, config: {
+                name: "Min Heat (h/period)",
+                default_value: 0,
+                min: 0,
+                max: 24,
+                persisted: true,
+                meta: { ui: { view: "slider", unit: "min h/period" } }
+            }
+        },
     ];
 }
 
@@ -227,8 +231,17 @@ function sAut() {
 // check if Shelly supports Virtual components
 function isVC() {
     const info = Shelly.getDeviceInfo();
-    return (info.gen === 3 || (info.gen === 2 && info.app.substring(0, 3) == "Pro")) && verC('1.4.3', info.ver) && !c.mnKv;
+
+    if (c.mnKv === true) {
+        print(_.pId, "ManualKVS=true → forcing KVS mode");
+        return false;
+    }
+
+    // Gen4 ja Gen3 OK; Gen2 ainult Pro + min FW 1.4.3
+    const gen2ok = (info.gen === 2 && (info.app || "").substring(0, 3) === "Pro" && verC('1.4.3', info.ver));
+    return (info.gen === 4 || info.gen === 3 || gen2ok);
 }
+
 // compare Shelly FW versions
 function verC(old, newV) {
     const oldP = old.split('.');
@@ -254,6 +267,7 @@ function memC(dt) {
     c.cnty = dt.Country;
     c.hCur = dt.HeatingCurve;
     c.mnKv = typeof dt.ManualKVS === "boolean" ? dt.ManualKVS : c.mnKv;
+    c.minH = typeof dt.MinHeatingTime === "number" ? dt.MinHeatingTime : c.minH; // <--
     return c;
 }
 // ConfigurationData data to KVS store
@@ -270,6 +284,7 @@ function kvsC() {
     cdat.Country = c.cnty;
     cdat.HeatingCurve = c.hCur;
     cdat.ManualKVS = c.mnKv;
+    cdat.MinHeatingTime = c.minH; // <--
     return cdat;
 }
 // Get KVS SystemData into memory
@@ -420,8 +435,8 @@ function sGrp() {
             "enum:201",
             "number:201",
             "number:202",
-            "boolean:201",
-            "enum:202"
+            "enum:202",
+            "number:204"
         ]
     };
     Shelly.call("Group.Set", gCnf, function (res, err, msg) {
@@ -442,9 +457,9 @@ function rVc() {
         ["pack", "enum:201"],
         ["lowR", "number:201"],
         ["higR", "number:202"],
-        ["Inv", "boolean:201"],
         ["cnty", "enum:202"],
         ["hCur", "number:203"],
+        ["minH","number:204"],
     ];
     Shelly.call("Shelly.GetComponents", { dynamic_only: true, include: ["status"] },
         function (res, err) {
@@ -472,6 +487,11 @@ function rVc() {
 function main() {
     _.cPer = c.tPer <= 0 ? 0 : Math.ceil((24 * 100) / (c.tPer * 100));  //number of periods in a day
     _.hTim = c.hTim > c.tPer ? c.tPer : c.hTim;                         //heating time can't be more than the period
+    // MIN klamber manual-režiimile (kui perioodid kasutusel)
+    if (c.tPer > 0 && c.minH > 0) {
+        _.hTim = Math.max(_.hTim, c.minH);
+        _.hTim = Math.min(_.hTim, c.tPer);
+    }
     //check if Shelly has time
     if (!isTm) {
         hErr("Shelly has no time");
@@ -524,6 +544,12 @@ function gFcs() {
         fcTm = fcTm < 0 || tFcs > maxT ? 0 : fcTm;  //heating time can't be negative
         _.hTim = Math.floor(fcTm / _.cPer);         //heating time per period (round-down heating time)
         _.hTim = _.hTim > c.tPer ? c.tPer : _.hTim; //heating time can't be more than the period
+
+        // MIN klamber forecast-režiimile (kui perioodid kasutusel)
+        if (c.tPer > 0 && c.minH > 0) {
+            _.hTim = Math.max(_.hTim, c.minH);
+            _.hTim = Math.min(_.hTim, c.tPer);
+        }
 
         print(_.pId, "Temperture forecast width windchill is ", tFcs, " °C, and heating enabled for ", _.hTim, " hours.");
         gEle();

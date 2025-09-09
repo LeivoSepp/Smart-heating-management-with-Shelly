@@ -128,6 +128,9 @@ Kõik kasutaja häälestused asuvad JSON formaadis parameetri ``SmartHeatingConf
 "HeatingTime": 10,
 "IsForecastUsed": true,
 ``` 
+> [!IMPORTANT]
+> Alates versioonist 4.7 määrab parameeter ``HeatingTime`` minimaalse kütmise kestuse, kui kasutatakse ilmaennustuspõhist kütmist. Kui parameetri väärtuseks on 0, siis ei köeta, kui välistemperatuur on üle 16 °C. 
+
 Vaata küttereziimide osas alltoodud tabelit.
 
 > Küttereziime saate kohandada viisil, et need sobiksid teie isiklike eelistuste ja konkreetsete olukordadega.

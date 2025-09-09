@@ -136,6 +136,9 @@ All the user settings are stored in JSON format under the key ``SmartHeatingConf
 "HeatingTime": 10,
 "IsForecastUsed": true,
 ``` 
+> [!IMPORTANT]
+> Starting from version 4.7, the parameter ``HeatingTime`` defines the minimum heating duration when forecast-based heating is used. If this parameter is set to 0, heating will not activate when the outside temperature exceeds 16 °C.   
+
 These options are described in the following table.
 
 > You can customize or change the heating modes to better suit your personal preferences and specific situations. This flexibility allows you to adjust the system based on your needs, energy considerations, and comfort requirements. 

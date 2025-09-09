@@ -109,7 +109,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.6,      //new script version
+    newV: 4.7,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -133,7 +133,7 @@ function dtVc() {
         },
         {
             type: "number", id: 200, config: {
-                name: "Heating Time (h/period)",
+                name: "Min On Time (h/period)",
                 default_value: 10,
                 min: 0,
                 max: 24,
@@ -227,7 +227,15 @@ function sAut() {
 // check if Shelly supports Virtual components
 function isVC() {
     const info = Shelly.getDeviceInfo();
-    return (info.gen === 3 || (info.gen === 2 && info.app.substring(0, 3) == "Pro")) && verC('1.4.3', info.ver) && !c.mnKv;
+
+    if (c.mnKv === true) {
+        print(_.pId, "ManualKVS=true → forcing KVS mode");
+        return false;
+    }
+
+    // Gen4 ja Gen3 OK; Gen2 ainult Pro + min FW 1.4.3
+    const gen2ok = (info.gen === 2 && (info.app || "").substring(0, 3) === "Pro" && verC('1.4.3', info.ver));
+    return (info.gen === 4 || info.gen === 3 || gen2ok);
 }
 // compare Shelly FW versions
 function verC(old, newV) {
@@ -524,6 +532,7 @@ function gFcs() {
         fcTm = fcTm < 0 || tFcs > maxT ? 0 : fcTm;  //heating time can't be negative
         _.hTim = Math.floor(fcTm / _.cPer);         //heating time per period (round-down heating time)
         _.hTim = _.hTim > c.tPer ? c.tPer : _.hTim; //heating time can't be more than the period
+        _.hTim = _.hTim < c.hTim ? c.hTim : _.hTim; //heating time can't be less than the user setting 
 
         print(_.pId, "Temperture forecast width windchill is ", tFcs, " °C, and heating enabled for ", _.hTim, " hours.");
         gEle();

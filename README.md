@@ -3,6 +3,18 @@
 > [!TIP]
 > This Shelly script is designed to optimize heating activation by leveraging energy market prices from Elering, ensuring heating operates during the most cost-effective hours using various algorithms.
 
+> [!IMPORTANT]
+> Starting October 1, 2025, Elering switched to 15-min electricity price intervals, which means their API structure has changed. To keep your Shelly automation working, you need to:
+> 
+> ✅ Update Your Shelly Script
+> * Minimum required version: 4.8 or later
+> * Reason: Older scripts assume hourly prices, but now the API returns 15-minute intervals.
+
+> [!IMPORTANT]
+> Starting October 1, 2025, the Elering API now provides electricity market prices in 15-min intervals, resulting in four times more data. This significantly increases memory usage (peak usage 22kB), so Shelly devices can now run only one instance of this script per device. Please ensure that you dedicate a separate Shelly device for each script.
+> This has not yet been validated with Gen-4 devices, which may support increased memory for scripting.
+
+
 - [Smart and cheap heating with Shelly](#smart-and-cheap-heating-with-shelly)
   - [Key Features](#key-features)
   - [Monitoring and edit schedule](#monitoring-and-edit-schedule)
@@ -136,8 +148,6 @@ All the user settings are stored in JSON format under the key ``SmartHeatingConf
 "HeatingTime": 10,
 "IsForecastUsed": true,
 ``` 
-> [!IMPORTANT]
-> Starting from version 4.7, the parameter ``HeatingTime`` defines the minimum heating duration when forecast-based heating is used. If this parameter is set to 0, heating will not activate when the outside temperature exceeds 16 °C.   
 
 These options are described in the following table.
 

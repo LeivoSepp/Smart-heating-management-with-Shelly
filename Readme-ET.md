@@ -3,6 +3,19 @@
 > [!TIP]
 > See Shelly skript tagab kütteseadme töö kõige odavamate tundide ajal, kasutades elektri börsihindu ja erinevaid algoritme.
 
+> [!IMPORTANT]
+> Alates 1. oktoobrist 2025 kasutab Elering 15-min elektrihinda, mis tähendab, et nende API struktuur on muutunud. Et sinu Shelly automatiseerimine töötaks edasi, pead:
+> 
+> ✅ Uuendama oma Shelly skripti
+>
+> * Minimaalne nõutud versioon: 4.8 või uuem
+> * Põhjus: Vanemad skriptid eeldavad tunnipõhiseid hindu, kuid nüüd tagastab API 15-minutilisi intervalle.
+
+> [!IMPORTANT]
+> Alates 1. oktoobrist 2025 kasutab Elering 15-min elektrihinda, mis tähendab neli korda rohkem andmeid. See suurendab oluliselt mälukasutust (kuni 22kB), mistõttu saavad Shelly seadmed nüüd käivitada ainult ühe skripti seadme kohta. Palun veendu, et nüüdsest on iga skripti jaoks eraldi Shelly seade.
+> Seda ei ole veel Gen-4 seadmetega testitud — need võivad toetada suuremat skriptimälu.
+
+
 - [Nutikas ja odav börsihinna järgi kütmine Shellyga](#nutikas-ja-odav-börsihinna-järgi-kütmine-shellyga)
   - [Põhifunktsioonid](#põhifunktsioonid)
   - [Jälgimine ja ajakava muutmine](#jälgimine-ja-ajakava-muutmine)
@@ -128,8 +141,6 @@ Kõik kasutaja häälestused asuvad JSON formaadis parameetri ``SmartHeatingConf
 "HeatingTime": 10,
 "IsForecastUsed": true,
 ``` 
-> [!IMPORTANT]
-> Alates versioonist 4.7 määrab parameeter ``HeatingTime`` minimaalse kütmise kestuse, kui kasutatakse ilmaennustuspõhist kütmist. Kui parameetri väärtuseks on 0, siis ei köeta, kui välistemperatuur on üle 16 °C. 
 
 Vaata küttereziimide osas alltoodud tabelit.
 

@@ -112,7 +112,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.8,      //new script version
+    newV: 4.9,      //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -187,7 +187,7 @@ function dtVc() {
                 options: ["ee", "fi", "lv", "lt"],
                 default_value: "ee",
                 persisted: true,
-                meta: { ui: { view: "dropdown", webIcon: 9, titles: { "ee": "Estonia", "fi": "Findland", "lv": "Latvia", "lt": "Lithuania" } } }
+                meta: { ui: { view: "dropdown", webIcon: 9, titles: { "ee": "Estonia", "fi": "Finland", "lv": "Latvia", "lt": "Lithuania" } } }
             }
         },
         {
@@ -569,9 +569,8 @@ function gEle() {
         }
         c.pack = eval("pack()." + c.pack);      //convert transfer fee to variable and load the data
 
-        // Convert base64 to text and discard header
-        res.body_b64 = atob(res.body_b64);
-        let body = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);
+        res.body_b64 = atob(res.body_b64);                                  //decode base64 to text
+        let body = res.body_b64.substring(res.body_b64.indexOf("\n") + 1);  //skip the first line
         res = null;
         let raw = [];
         let eler = [];
@@ -589,8 +588,8 @@ function gEle() {
             let pric = 0;
             let hr = new Date(row[0] * 1000).getHours();
             let hr15 = hr;
-            let avg = 1;
-            while (hr === hr15 && hr15 < 24) //sum 1 hour prices
+            let avg = 0;
+            while (hr === hr15 && hr15 < 24)          //sum 1 hour prices
             {
                 avg++;
                 aPos = body.indexOf(";\"", aPos) + 2; //skip ;
@@ -602,11 +601,11 @@ function gEle() {
                 if (nxt === 0) {
                     break; // EOF
                 }
-                hr15 = new Date(Number(body.substring(nxt, body.indexOf("\"", nxt))) * 1000).getHours();
+                hr15 = new Date(Number(body.substring(nxt, body.indexOf("\"", nxt))) * 1000).getHours(); //next hour
             }
 
-            row[1] = pric / (avg - 1);  //avg price for the hour
-            row[1] += fFee(row[0]);     //add transfer fee
+            row[1] = Math.round((pric / avg) * 100) / 100;  //avg price for the hour, round 2 dec places
+            row[1] += fFee(row[0]);                         //add transfer fee
             raw.push(row);
         }
         //if elering API returns less than 24 rows, the script will try to download the data again after set of minutes
@@ -724,7 +723,7 @@ function fFee(epoch) {
 
 // Set countdown timer to flip Shelly status
 function fTmr() {
-    const timr = c.tmr * 60 + 2; //+2sec to remove flap between continous heating hours
+    const timr = c.tmr * 60 + 10; //+10sec to remove flap between continous heating hours
     Shelly.call("Switch.SetConfig", {
         id: c.rId,
         config: {

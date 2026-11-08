@@ -12,7 +12,7 @@
 > * Põhjus: Vanemad skriptid eeldavad tunnipõhiseid hindu, kuid nüüd tagastab API 15-minutilisi intervalle.
 
 > [!IMPORTANT]
-> Alates 1. oktoobrist 2025 kasutab Elering 15-min elektrihinda, mis tähendab neli korda rohkem andmeid. See suurendab oluliselt mälukasutust (kuni 22kB), mistõttu saavad Shelly seadmed nüüd käivitada ainult ühe skripti seadme kohta. Palun veendu, et nüüdsest on iga skripti jaoks eraldi Shelly seade.
+> Alates 1. oktoobrist 2025 kasutab Elering 15-min elektrihinda, mis tähendab neli korda rohkem andmeid. Versiooni 4.9 mälutipp oli 22 kB, seega kehtis reegel üks skript seadme kohta. Versioon 5 loeb hinnad osadena ja tipp on madalam (Espruino mõõtmises 13–14 kB, Plus 1PM-il 14,8 kB); kontrolli oma seadmel ``mem_peak`` enne kahe eksemplari käivitamist.
 > Seda ei ole veel Gen-4 seadmetega testitud — need võivad toetada suuremat skriptimälu.
 
 
@@ -28,6 +28,8 @@
       - [``"EnergyProvider": "VORK1"``](#energyprovider-vork1)
       - [``"AlwaysOnPrice": 10``](#alwaysonprice-10)
       - [``"AlwaysOffPrice": 300``](#alwaysoffprice-300)
+      - [``"MaxFullPrice": 0``](#maxfullprice-0)
+      - [``"SlotMinutes": 60``](#slotminutes-60)
       - [``"InvertedRelay": false``](#invertedrelay-false)
       - [``"RelayId": 0``](#relayid-0)
       - [``"Country": "ee"``](#country-ee)
@@ -61,12 +63,33 @@
 2. **Fikseeritud odavad tunnid**: Jaota päev ajaperioodideks (6, 12 või 24) ja aktiveeri küte iga perioodi kõige odavama(te)l tundidel. 
 3. **Hinnatasemete kasutamine**: Kasuta min ja max hinnaläve, et hoida Shelly süsteem sellest lähtuvalt ka sees või väljas. 
 
-**Käivituse ajakava**: Skript töötab iga päev pärast 23:00 või vajadusel päeva jooksul, et arvutada järgmise perioodi või päeva küttetunnid. 
+**Käivituse ajakava**: Skript töötab iga päev pärast 23:45 või vajadusel päeva jooksul, et arvutada järgmise perioodi või päeva küttetunnid. 
+
+### Hinnaslotid ja versiooni 5 muudatused (``SlotMinutes``, ``MaxFullPrice``)
+* Ilma ``SlotMinutes`` võtmeta planeerib skript tunni keskmise hinna järgi ja lülitab kord tunnis, nagu enne versiooni 5. Veerandtunnine lülitamine sobib akupaagile või boilerile; soojuspump või kompressor jäägu tunnirežiimi või kasutagu pikemaid slotte.
+* Võtmega ``"SlotMinutes": 15`` planeerib ja lülitab skript kütet 15-minutiliste hindade järgi. ``HeatingTime`` ja ``TimePeriod`` on endiselt tundides: ``HeatingTime: 10`` tähendab perioodi 40 kõige odavamat veerandtundi. Teised sloti pikkused (30, 120, 180, 240) kasutavad sloti keskmist börsihinda ja keskmist võrgutasu ning ``HeatingTime`` ümardatakse tervete slottideni alla (``240`` vajab vähemalt 4 h; ümardamine kirjutatakse logisse). ``AlwaysOnPrice``, ``AlwaysOffPrice`` ja ``MaxFullPrice`` kehtivad iga sloti kohta.
+* Skript loob kuni neli ajakava, üks iga tunniveerandi kohta (minut 0, 15, 30 ja 45). Relee lülitub välja ühe sloti ja 10 sekundi pärast, nii et järjestikused slotid hoiavad selle sees.
+* Hinnad küsitakse Eleringist 6-tunniste osadena, et mälu tipp jääks väikseks. Arvutus käib päeva viimase tunni (või ``IsForecastUsed`` korral iga perioodi viimase tunni) minutitel 46 kuni 55, kui selle tunni viimane slott on juba alanud. ``TimePeriod`` 0 korral ilmaprognoosi ei kasutata, ka siis mitte, kui ``IsForecastUsed`` on true.
+* KVS-i ``ExistingSchedule`` on ajakavade ID-de loend. Versiooni 4.9 üks ID teisendatakse automaatselt ja watchdog kustutab kõik loendis olevad ajakavad.
+* Sügisese kellakeeramise ööl planeeritakse korduv kell 03 tund eraldi slottidena, aga ajakava käivitub ühe kellaaja kohta korra, nii et sel ööl köetakse kuni tund vähem kui plaanis. Tunnist pikemate slottide korral jääb kellakeeramise päeva poolik viimane slott planeerimata, et relee oleks keskööks väljas.
+* Veerandtunnised slotid säästavad raha ainult siis, kui leping arveldab veerandtunni kaupa.
+
+### Testide käivitamine
+Testid käivitavad skripti Node.js 24-s, Shelly API-d on asendatud ja Eleringi ning Open-Meteo vastused on salvestatud. Väliseid pakette pole vaja:
+```
+npm test
+```
+``npm test`` võrdleb ajutiste andmete mahtu versiooniga 4.9. Mootori mälu mõõdetakse eraldi Espruino interpretaatoris, millel Shelly skriptimootor põhineb:
+```
+tests/espruino/build-espruino.sh
+npm run test:memory
+```
+Ehitusskript kompileerib Espruino 2v29 (commit ``e73051a``) koos ``tests/espruino/espruino-shelly.patch`` muudatustega Dockeris staatiliseks 32-bitiseks binaariks, nii et muutujaplokk on 14 baiti nagu ESP32-l (``--native`` ehitab hosti kompilaatoriga, 64-bitisel masinal 18-baidised plokid). ``npm run test:memory`` jooksutab versiooni 4.9 ja praeguse skripti ühe arvutustsükli salvestatud tavalise, kahe suveaja vahetuse ja negatiivse hinnaga päeva peal nelja sättega (vaikimisi tunnirežiim, akupaak 15 min, soe vesi 15 min, terve päev 15 min), loeb ``process.memory()`` kaudu mälu tipu ja tsükli järel alles jäänud mälu, kontrollib, et skript planeerib 25 kB sees samad ajakavad, et praeguse skripti tipp ei ole kõrgem kui versioonil 4.9 ja et tsükli järel alles jääv mälu jääb alla 8 kB (kaks eksemplari jagavad skriptimälu). Shelly enda mootor ja püsivara erinevad Espruinost, seega kontrolli pärast uuendamist seadmel ``mem_peak`` väärtust.
 
 ## Jälgimine ja ajakava muutmine 
 
 > [!NOTE]
-> Alates skriptiversioonist 3.9 (jaanuar 2025) loob see skript ühe ajakava, mis sisaldab kõiki vajalikke küttetunde. 
+> Alates skriptiversioonist 3.9 (jaanuar 2025) loob see skript ühe ajakava, mis sisaldab kõiki vajalikke küttetunde. Kui ``SlotMinutes`` on alla 60, on selliseid ajakavu üks iga tunniveerandi kohta, kuni neli.
 
 ## Kuidas kontrollida ajakava 
 Skripti loodud küttetundide vaatamiseks: 
@@ -82,8 +105,8 @@ Skripti loodud küttetundide vaatamiseks:
 > Järgmine kord kui skript arvutab uue ajakava, kirjutatakse kõik käsitsi loodudmuudatused üle. 
 
 **Kuidas jälgida skripti käivitumist**   
-Andmeväli ``LastCalculation`` KVS-is värskendatakse iga kord, kui Eleringist on saadud uued elektrihinnad ja genereeritakse järgmise perioodi ajakava.  
-Andmeväli ``ExistingSchedule`` KVS-s on antud skripti poolt loodud schedule ID.
+Andmeväli ``LastCalculation`` KVS-is värskendatakse iga kord, kui ajakavad asendatakse, nii hinnaarvutuse kui ka varuplaani järel.  
+Andmeväli ``ExistingSchedule`` KVS-s on skripti loodud ajakavade ID-de loend (üks iga tunniveerandi kohta, kui ``SlotMinutes`` on alla 60).
 
 ## Skripti parameetrite konfigureerimine 
 
@@ -108,14 +131,15 @@ let c = {
     tPer: 24,       // KVS:TimePeriod VC:Heating Period (h) 24/12/6/0
     hTim: 10,       // KVS:HeatingTime VC:Heating Time (h/period)
     isFc: false,    // KVS:IsForecastUsed VC:Forecast Heat
-    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL)
+    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1)
     lowR: 1,        // KVS:AlwaysOnPrice VC:Heat On (min price) (EUR/MWh)
     higR: 300,      // KVS:AlwaysOffPrice VC:Heat Off (max price) (EUR/MWh)
+    fulR: 0,        // KVS:MaxFullPrice (optional) VC: N/A, heat off if the full price (market + network + charges, VAT included) is higher (EUR/MWh), 0 = not used
     Inv: false,     // KVS:InvertedRelay VC:Inverted Relay
     rId: 0,         // KVS:RelayId VC: N/A, always first relay (0)
     cnty: "ee",     // KVS:Country VC:Market Price Country (ee, fi, lv, lt)
     hCur: 0,        // KVS:HeatingCurve VC:Heating Curve 
-    tmr: 60,        // Default timer
+    sltM: 60,       // KVS:SlotMinutes (optional) VC: N/A, price slot length 15, 30, 60, 120, 180 or 240 min; 60 = hourly averages as before v5
     pFac: 0.5,      // Power factor
     mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
 }
@@ -124,7 +148,7 @@ let c = {
 ### Skripti KVS häälestamine
 
 Kui skript on **KVS-modes**, saab seadeid muuta seadme veebilehe kaudu, kasutades selle IP-aadressi: Menu → Advanced → KVS.  
-Kõik kasutaja häälestused asuvad JSON formaadis parameetri ``SmartHeatingConf`` all.
+Kõik kasutaja häälestused asuvad JSON formaadis parameetri ``SmartHeatingConf`` all. Vaikeväärtusega võti (``InvertedRelay`` false, ``RelayId`` 0, ``HeatingCurve`` 0, ``ManualKVS`` false, ``MaxFullPrice`` 0, ``SlotMinutes`` 60) jäetakse salvestatud väärtusest välja ja selle võib käsitsi lisada: KVS väärtus mahutab 253 baiti nii, et iga jutumärk on varjestatud, seega täielik seadistus ei mahuks.
 
 > [!IMPORTANT]
 > Alates versioonist 4.2, hoitakse KVS-s andmeid JSON formaadis.  
@@ -156,10 +180,10 @@ Vaata küttereziimide osas alltoodud tabelit.
 | ``TimePeriod": 12,``<br>``"HeatingTime": 6,``<br>``"IsForecastUsed": false`` | Küte on aktiveeritud **kuuel** kõige odavamal tunnil igas **12-tunnises** perioodis. | Suur veepaak 1000L või rohkem, suure kasutusega. |
 | ``TimePeriod": 12,``<br>``"HeatingTime": 2,``<br>``"IsForecastUsed": false`` | Küte on aktiveeritud **kahel** kõige odavamal tunnil igas **12-tunnises** perioodis. | Väike 150L veeboiler väikesele majapidamisele. |
 | ``TimePeriod": 6,``<br>``"HeatingTime": 2,``<br>``"IsForecastUsed": false`` | Küte on aktiveeritud **kahel** kõige kulutõhusamal tunnil igas **6-tunnises** perioodis. | Suur 200L veeboiler neljale või enamale inimesele mõeldud majapidamisele. |
-| ``TimePeriod": 0,``<br>``"HeatingTime": 0,``<br>``"IsForecastUsed": false`` | Küte on aktiveeritud ainult tundidel, kui elektri börsihind on madalam kui määratud ``alwaysOnLowPrice``. |
+| ``TimePeriod": 0,``<br>``"HeatingTime": 0,``<br>``"IsForecastUsed": false`` | Küte on aktiveeritud ainult slottidel, kui elektri börsihind on madalam kui määratud ``AlwaysOnPrice`` (ja mitte üle ``AlwaysOffPrice`` või ``MaxFullPrice``). Ilma perioodita ilmaprognoosi ei kasutata. |
 
 #### ``"EnergyProvider": "VORK1"``
-Elektrilevi või Imatra elektri ülekandetasude pakett. Valikus on VORK1, VORK2, VORK4, VORK5, Partner24, Partner24Plus, Partner12, Partner12Plus ja NONE. Vali None, et mitte arvestada ülekandetasusid. 
+Elektrilevi, Imatra või Läti elektri ülekandetasude pakett. Täpsed võtmed on VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1 ja NONE; tundmatu võti kirjutatakse logisse ja loetakse NONE-ks. Vali NONE, et mitte arvestada ülekandetasusid. 
 Ülekandetasude üksikasjad leiab siit: [Elektrilevi](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu) või [Imatra](https://imatraelekter.ee/vorguteenus/vorguteenuse-hinnakirjad/).
 
 | Võrgupakett | Kirjeldus | |
@@ -169,9 +193,11 @@ Elektrilevi või Imatra elektri ülekandetasude pakett. Valikus on VORK1, VORK2,
 | ``VORK4`` | **Elektrilevi**<br> Päeval 37 EUR/MWh <br> Öösel 21 EUR/MWh | <img src="images/Vork2-4.jpg" alt="Elektrilevi Võrk 2, 4" width="250"> |
 | ``VORK5`` | **Elektrilevi**<br> Päeval 53 EUR/MWh <br> Öösel 30 EUR/MWh <br> Päeva tipp 82 EUR/MWh <br> Puhke tipp 47 EUR/MWh | <img src="images/Vork5-1.jpg" alt="Elektrilevi Võrk 5" width="250"> <img src="images/Vork5-2.jpg" alt="Elektrilevi Võrk 5" width="250"> |
 | ``PARTN24`` | **Imatra**<br> Päev/öö 60 EUR/MWh | |
-| ``PARTN24P`` | **Imatra**<br> Päev/öö 39 EUR/MWh | |
+| ``PARTN24PL`` | **Imatra**<br> Päev/öö 39 EUR/MWh | |
 | ``PARTN12`` | **Imatra**<br> Päeval 72 EUR/MWh <br> Öösel 42 EUR/MWh | Suveaeg päev: E-R kell 8:00–24:00.<br>Öö: E-R kell 0:00–08:00, L-P terve päev <br> Talveaeg päev: E-R kell 7:00–23:00.<br>Öö: E-R kell 23:00–7:00, L-P terve päev |
-| ``PARTN12P`` | **Imatra**<br> Päeval 46 EUR/MWh <br> Öösel 27 EUR/MWh | Suveaeg päev: E-R kell 8:00–24:00.<br>Öö: E-R kell 0:00–08:00, L-P terve päev <br> Talveaeg päev: E-R kell 7:00–23:00.<br>Öö: E-R kell 23:00–7:00, L-P terve päev |
+| ``PARTN12PL`` | **Imatra**<br> Päeval 46 EUR/MWh <br> Öösel 27 EUR/MWh | Suveaeg päev: E-R kell 8:00–24:00.<br>Öö: E-R kell 0:00–08:00, L-P terve päev <br> Talveaeg päev: E-R kell 7:00–23:00.<br>Öö: E-R kell 23:00–7:00, L-P terve päev |
+| ``PAMATA1`` | **Läti (Sadales tīkls)**<br> Päev/öö 39,62 EUR/MWh | |
+| ``SPECIAL1`` | **Läti (Sadales tīkls)**<br> Päev/öö 158,48 EUR/MWh | |
 | ``NONE`` | Võrgutasu on 0 ||
 
 #### ``"AlwaysOnPrice": 10``
@@ -179,6 +205,12 @@ Küte on igal juhul sees, kui börsihind on sellest väärtusest madalam (EUR/MW
 
 #### ``"AlwaysOffPrice": 300``
 Küte on igal juhul väljas, kui börsihind ületab selle väärtuse (EUR/MWh). 
+
+#### ``"MaxFullPrice": 0``
+Vabatahtlik. Küte jääb välja igal hinnaslotil, mille täishind on sellest väärtusest kõrgem (EUR/MWh, KM sees), ka siis, kui ``AlwaysOnPrice`` sloti sisse lülitaks, ja ka ``TimePeriod`` 0 korral. Täishind on börsihind pluss ``EnergyProvider`` võrgutasu pluss riiklikud tasud, kõik käibemaksuga. Nii saab elektrit võrrelda muu kütusega arvel oleva hinna järgi: näiteks 110 tähendab 11 c/kWh. ``0`` või puuduv võti lülitab kontrolli välja ja võti salvestatakse KVS-i ainult siis, kui see on seatud. Tasud ja käibemaks on teada ainult Eesti kohta (``"Country": "ee"``: taastuvenergia tasu 8,4, aktsiis 2,1, varustuskindluse tasu 7,58, tasakaalustamisvõimsuse tasu 3,73 EUR/MWh ja KM 24 % aastal 2026); muu riigi korral jäetakse piir arvestamata ja skript kirjutab sellest logisse. Ainult KVS-is, virtuaalkomponenti ei ole: Virtual Component režiimis lisa võti ``SmartHeatingConf<id>`` JSON-i, teised võtmed võivad puududa.
+
+#### ``"SlotMinutes": 60``
+Vabatahtlik. Ühe hinnasloti pikkus minutites: ``15``, ``30``, ``60``, ``120``, ``180`` või ``240``. ``60`` (vaikimisi) planeerib tunni keskmise hinna järgi ja lülitab releed kord tunnis nagu versioonid enne 5.0; ``15`` planeerib veerandtunni hindade järgi ja lülitab iga 15 minuti tagant; pikemad slotid keskmistavad hinna 2, 3 või 4 tunni peale ja lülitavad kord sloti kohta, mis sobib soojuspumbale ja teistele seadmetele, mis ei tohi tihti lülituda. Slott peab jagama ``TimePeriod`` tervete slottideni (``240`` vajab 4, 8, 12 või 24 tunni perioodi); muu väärtus kirjutatakse logisse ja loetakse ``60``-ks. ``HeatingTime`` ümardatakse tervete slottideni alla ja ümardamine kirjutatakse logisse. Ainult KVS-is, virtuaalkomponenti ei ole: Virtual Component režiimis lisa võti ``SmartHeatingConf<id>`` JSON-i, teised võtmed võivad puududa. Võti salvestatakse ainult siis, kui see erineb ``60``-st.
 
 #### ``"InvertedRelay": false``
 Konfigureerib relee oleku kas normaalseks või pööratud.
@@ -194,10 +226,10 @@ Shelly relay ID on vaikimisi 0, kuid mitme väljundiga Shelly puhul tähistab se
 Börsihinna riik. Toetatud on ainult Eleringi API riigid. * ``ee`` - Eesti * ``fi`` - Soome * ``lt`` - Leedu * ``lv`` - Läti 
 
 #### ``"HeatingCurve": 0``
-Ilmaennustuse prognoosi mõju suurendamine või vähendamine küttetundidele. Vaikeväärtus on ``0``, nihe 1 võrdub 1h. See seadistus kehtib ainult siis, kui kasutatakse ilmaprognoosiga kütteaga.
+Ilmaennustuse prognoosi mõju suurendamine või vähendamine küttetundidele. Vaikeväärtus on ``0``; üks samm on üks tund kütet päevas (pool tundi 12-tunnise perioodi kohta). See seadistus kehtib ainult siis, kui kasutatakse ilmaprognoosiga kütteaga.
 Vaadake kütte kõvera mõju kütte aja sõltuvusgraafikutele: [kütteaja sõltuvusgraafikud](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
-    * ``-6`` - 6h vähem kütmist
-    * ``6`` - 6h rohkem kütmist
+    * ``-6`` - 6 tundi päevas vähem kütmist
+    * ``6`` - 6 tundi päevas rohkem kütmist
 
 # Kuidas seda skripti installida
 
@@ -237,18 +269,26 @@ let c = {
     tPer: 24,       // KVS:TimePeriod VC:Heating Period (h) 24/12/6/0
     hTim: 10,       // KVS:HeatingTime VC:Heating Time (h/period)
     isFc: false,    // KVS:IsForecastUsed VC:Forecast Heat
-    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL)
+    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1)
     lowR: 1,        // KVS:AlwaysOnPrice VC:Heat On (min price) (EUR/MWh)
     higR: 300,      // KVS:AlwaysOffPrice VC:Heat Off (max price) (EUR/MWh)
+    fulR: 0,        // KVS:MaxFullPrice (optional) VC: N/A, heat off if the full price (market + network + charges, VAT included) is higher (EUR/MWh), 0 = not used
     Inv: false,     // KVS:InvertedRelay VC:Inverted Relay
     rId: 0,         // KVS:RelayId VC: N/A, always first relay (0)
     cnty: "ee",     // KVS:Country VC:Market Price Country (ee, fi, lv, lt)
     hCur: 0,        // KVS:HeatingCurve VC:Heating Curve 
-    tmr: 60,        // Default timer
+    sltM: 60,       // KVS:SlotMinutes (optional) VC: N/A, price slot length 15, 30, 60, 120, 180 or 240 min; 60 = hourly averages as before v5
     pFac: 0.5,      // Power factor
     mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
 }
 ```
+
+## Seadme eripärad
+
+* Seadme skriptimootori pinu saab täis umbes viie pesastatud JavaScripti kutse juures; skript hoiab iga jätku callback'is ja kuumad tsüklid ühes funktsioonis. Uus kood jäägu nelja kutse sisse callback'ist, Node'i testid seda ei püüa.
+* Lae skript üles ``tools/deploy.py`` abil (``python3 tools/deploy.py main 192.168.x.x``): see eemaldab kommentaarid (seadme koopia on siis umbes 33 kB 49 kB asemel, suurem üleslaadimine on Plus 1PM-i taaskäivitanud), teisendab teksti ASCII-ks (``Script.PutCode`` ei võta muid märke), laeb 1 kB tükkidena, loeb koodi tagasi ja käivitab skripti. ``tools/deploy.py verify`` näitab skripti olekut, relee taimerit, KVS-i ja ajakavu; ``tools/deploy.py kvs`` seab seadistuse väärtuse.
+* Seadme logi (``ws://192.168.x.x/debug/log``, vaikimisi sees) näitab skripti printe ja vigu; ``tools/deploy.py log 60`` salvestab seda minuti.
+* KVS väärtus mahutab 253 baiti nii, et iga jutumärk on varjestatud, vt [Skripti KVS häälestamine](#skripti-kvs-häälestamine).
 
 ## Skripti uuendamine
 
@@ -277,7 +317,7 @@ let c = {
 1. Internetiühendus:
     * Skript vajab internetti, et alla laadida igapäevaseid elektrihindu ja ilmaprognoose.
 2. Igapäevane töö:
-    * Skript töötab iga päev pärast kella 23:00 või vastavalt vajadusele päeva jooksul, et määrata küttetunnid.
+    * Skript töötab iga päev pärast kella 23:45 või vastavalt vajadusele päeva jooksul, et määrata küttetunnid.
 3. Töövoog:
     * Skript järgib vooskeemi, et määrata parimad kütmissetunnid turuhindade ja ilmaprognooside põhjal.
 
@@ -309,7 +349,7 @@ flowchart TD
 
 * <p>Kui skript peatatakse, kustutatakse kütte ajakava. Shelly järgib kütte algoritmi ainult siis, kui skript töötab.</p>
 * <p>Kaks skripti installatsiooni saab käia korraga, kui esimene neist töötab Virtuaalsete Komponentidega, siis teine saab olla ainult KVS modes.
-* <p>KVS-režiimis võib korraga töötada kuni kaks erineva algoritmiga skripti ühel seadmel. Skriptid võivad kasutada kas sama releeväljundit Shelly Plus 1-ga või erinevaid releeväljundeid, nagu toetab näiteks Shelly Plus 2PM.</p>
+* <p>KVS-režiimis võib korraga töötada kuni kaks erineva algoritmiga skripti ühel seadmel. Skriptid võivad kasutada kas sama releeväljundit Shelly Plus 1-ga või erinevaid releeväljundeid, nagu toetab näiteks Shelly Plus 2PM. Sama releed jagavad skriptid peavad kasutama sama ``SlotMinutes`` ja ``InvertedRelay`` väärtust: viimane arvutus seab relee väljalülitustaimeri mõlemale.</p>
 * <p>See skript loob spetsiaalse "valvuri/watchdog" skripti. See "valvuri" skript kustutab Shelly kütte ajakava kui põhiskript peatatakse või kustutatakse.</p>
 * <p>Interneti katkestuste mõju vähendamiseks kasutab see skript parameetrit ``heating time``, et lülitada küte ajalooliselt odavamate tundide järgi sisse.</p>
 * <p>Selle skripti "Run on startup" nupp peab olema aktiveeritud. See seadistus tagab, et skript käivitub pärast voolukatkestust, Shelly taaskäivitust või püsivara uuendamist.</p>
@@ -327,7 +367,7 @@ Internetirikke korral jagab Shelly oma küttetunnid vastavalt häälestatud peri
 
 **Testitud rikkestsenaariumid**
 1. Shelly töötab edasi, kuid internet läheb maha kodurouteri või internetiteenuse pakkuja rikke tõttu. Shelly kellaaeg jääb korrektseks.
-2. Pärast voolukatkestust internet ei tööta ja Shellyl puudub kellaaeg.
+2. Pärast voolukatkestust internet ei tööta ja Shellyl puudub kellaaeg: skript ootab kellaaega ja planeerib kohe, kui see on olemas (ajakavad ei saa ilma kellata käivituda).
 3. Eleringi HTTP viga tekib ja Eleringi server pole kättesaadav.
 4. Eleringi API rike juhtub ja teenus on maas.
 5. Eleringi API tagastab valed andmed ja hinnad puuduvad.
@@ -404,7 +444,7 @@ Kütteaega mõjutab teie maja isolatsioon. Näiteks vana ja soojustamata maja v�
 
 Nende erinevuste arvestamiseks sisaldab skript parameetrit ``heatingCurve``, mis võimaldab kasutajal kohandada küttetegurit vastavalt maja soojapidavusele.
 
-* 24-tunnise perioodi graafik iseloomustab kuidas kütteaeg varieerub välistemperatuuri ja ``heatingCurve`` parameetri põhjal, mis omakorda nihutab küttegraafikut vasakule või paremale 1h sammuga. 
+* 24-tunnise perioodi graafik iseloomustab kuidas kütteaeg varieerub välistemperatuuri ja ``heatingCurve`` parameetri põhjal, mis omakorda nihutab küttegraafikut vasakule või paremale, üks samm on üks tund päevas. 
 
 <img src="images/HeatingCurve24.jpg" alt="Küttegraafik 24-tunniseks perioodiks" width="750">
 
@@ -414,7 +454,7 @@ ____
 
 <img src="images/HeatingCurve12.jpg" alt="Küttegraafik 12-tunniseks perioodiks" width="750">
 
-Kui matemaatiline pool huvitab siis küttegraafuku lineaarvõrrand on järgmine: ``(Temperatuuri prognoos) * PowerFactor + (Temperatuuri prognoos + heatingCurve)``.
+Kui matemaatiline pool huvitab, siis küttetunde päevas on ``(16 - T) * PowerFactor + HeatingCurve - 2``, kus ``T`` on tajutava temperatuuri prognoosi keskmine ja ``PowerFactor`` 0,5: üle 16 °C kütet ei ole, 0 °C juures 6 tundi ja -10 °C juures 11 tundi ``HeatingCurve`` 0-ga, kõige rohkem terve periood. 12- või 6-tunnine periood saab oma osa päevast, ümardatuna tervete slottideni alla. Tabelid on skripti päises.
 
 ## Ajaperioodi algoritm
 
@@ -472,9 +512,9 @@ Skript salvestab andmed Shelly KVS (Key-Value-Storage) säilitamaks neid elektri
 
 Salvestatud andmete juurde pääsemiseks Shelly seadme veebilehe kaudu, navigeerige **Advanced &rarr; KVS**.
 
-1. Parameeter: ``ExistingSchedule`` Väärtus: ``1``
+1. Parameeter: ``ExistingSchedule`` Väärtus: ``[12,13,14,15]``
    
-    See on skripti poolt loodud ajakava ID number. See teave on oluline iga skripti jaoks, et tuvastada ja hallata seotud ajakava. 
+    Skripti loodud ajakavade ID-d, üks iga tunniveerandi kohta, kui ``SlotMinutes`` on alla 60. Skript kustutab enne uute loomist täpselt need ajakavad ja watchdog kustutab need, kui skript peatub. 
 
 2. Parameeter: ``LastCalculation`` Väärtus: ``Fri Dec 27 2024 23:29:20 GMT+0200`` 
    

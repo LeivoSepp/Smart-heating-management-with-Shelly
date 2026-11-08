@@ -1,0 +1,12 @@
+{
+  "name": "smart-heating-management-with-shelly",
+  "private": true,
+  "description": "Tests for the Shelly smart heating script",
+  "scripts": {
+    "test": "TZ=Europe/Tallinn node --test 'tests/*.test.js'",
+    "test:memory": "TZ=Europe/Tallinn node --test tests/espruino/memory.test.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -91,7 +91,7 @@ describe('KVS read errors', () => {
     });
 
     it('keeps the old schedules and retries in KVS mode when SystemData cannot be read', () => {
-        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.2 });
+        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.0 });
         const job = { timespec: '0 0 23 * * *', calls: [{ method: 'Switch.Set', params: { id: 0, on: true } }] };
         const sim = start(QUARTER_CONF, { now: NORMAL_DAY.now, elering: NORMAL_DAY.fixture, kvs: { SmartHeatingSys1: sys }, schedules: { 7: job }, kvsGetFail: ['SmartHeatingSys1'] }).runFor(120);
         assert.ok(sim.schedules.has(7));
@@ -121,7 +121,7 @@ describe('forecast without a period', () => {
 });
 
 describe('Virtual Component mode', () => {
-    const SYS = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [], Version: 5.2 });
+    const SYS = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [], Version: 5.0 });
     const vc = (values) => Object.keys(values).map((key) => ({ key, status: { value: values[key] }, config: {} }));
     const PERIOD_12 = { 'enum:200': '12', 'number:200': 3, 'boolean:200': false, 'enum:201': 'VORK2', 'number:201': 1, 'number:202': 300, 'boolean:201': false, 'enum:202': 'ee', 'number:203': 0 };
 
@@ -163,7 +163,7 @@ describe('Virtual Component mode', () => {
     });
 
     it('keeps the schedules and retries when SystemData cannot be read', () => {
-        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.2 });
+        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.0 });
         const job = { timespec: '0 0 23 * * *', calls: [{ method: 'Switch.Set', params: { id: 0, on: true } }] };
         const sim = createShelly({ deviceInfo: GEN3, now: NORMAL_DAY.now, kvs: { SmartHeatingSys1: sys }, schedules: { 7: job }, components: vc(PERIOD_12), kvsGetFail: ['SmartHeatingSys1'] }).load().runFor(120);
         assert.ok(sim.schedules.has(7), 'nothing is deleted while SystemData is unknown');
@@ -183,7 +183,7 @@ describe('Virtual Component mode', () => {
     });
 
     it('keeps the schedules and retries when the components cannot be read', () => {
-        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.2 });
+        const sys = JSON.stringify({ LastCalculation: 'x', ExistingSchedule: [7], Version: 5.0 });
         const job = { timespec: '0 0 23 * * *', calls: [{ method: 'Switch.Set', params: { id: 0, on: true } }] };
         const sim = createShelly({ deviceInfo: GEN3, now: NORMAL_DAY.now, kvs: { SmartHeatingSys1: sys }, schedules: { 7: job }, components: vc(PERIOD_12), rpcFail: { 'shelly.getcomponents': -108 } }).load().runFor(120);
         assert.equal(sim.crashed, null, sim.logs.join('\n'));

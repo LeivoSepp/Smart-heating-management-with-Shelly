@@ -140,7 +140,7 @@ let _ = {
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
     fee: null,      //transfer fees of the network package
-    newV: 5.2,      //new script version
+    newV: 5.0,      //new script version
     sdOk: false,    //system data OK
     cfR: null,      //ConfigurationData as stored in KVS, to skip rewriting an unchanged value
     cfKp: false,    //keep the stored ConfigurationData: it could not be read or is not valid JSON

@@ -11,7 +11,7 @@
 > * Reason: Older scripts assume hourly prices, but now the API returns 15-minute intervals.
 
 > [!IMPORTANT]
-> Starting October 1, 2025, the Elering API now provides electricity market prices in 15-min intervals, resulting in four times more data. This significantly increases memory usage (peak usage 22kB), so Shelly devices can now run only one instance of this script per device. Please ensure that you dedicate a separate Shelly device for each script.
+> Starting October 1, 2025, the Elering API now provides electricity market prices in 15-min intervals, resulting in four times more data. Version 4.9 peaked at 22 kB of script memory, so one instance per device was the rule. Version 5 reads the prices in parts and peaks lower (13-14 kB in the Espruino measurement, 14.8 kB on a Plus 1PM); check ``mem_peak`` on your device before running two instances.
 > This has not yet been validated with Gen-4 devices, which may support increased memory for scripting.
 
 
@@ -27,6 +27,8 @@
       - [``"EnergyProvider": "VORK1"``](#energyprovider-vork1)
       - [``"AlwaysOnPrice": 10``](#alwaysonprice-10)
       - [``"AlwaysOffPrice": 300``](#alwaysoffprice-300)
+      - [``"MaxFullPrice": 0``](#maxfullprice-0)
+      - [``"SlotMinutes": 60``](#slotminutes-60)
       - [``"InvertedRelay": false``](#invertedrelay-false)
       - [``"RelayId": 0``](#relayid-0)
       - [``"Country": "ee"``](#country-ee)
@@ -65,15 +67,36 @@ Divides the day into time periods and activates heating during the cheapest hour
 Employs minimum and maximum price thresholds to keep the Shelly system consistently on or off based on cost efficiency.
 
 1. **Two script instances can run on same Shelly device**:
-Starting from the version 4.2, two script instances are supported on same Shelly device. The script memory usage was reduced from 16kB to 4.3kB and peak memory reduced from 25kB to 12kB.
+Starting from the version 4.2, two script instances are supported on same Shelly device (in version 4.2 the script memory usage went from 16 kB to 4.3 kB and the peak from 25 kB to 12 kB; the version 5 figures are in the note above).
 
 **Execution Schedule**:
-The script runs daily after 23:00 or as necessary during the day to set up heating time slots for the upcoming period.    
+The script runs daily after 23:45 or as necessary during the day to set up heating time slots for the upcoming period.    
+
+### Price slots and the changes of version 5 (``SlotMinutes``, ``MaxFullPrice``)
+* Without ``SlotMinutes`` the script plans by hourly average prices and switches once an hour, as before version 5. Quarter-hour switching suits a storage tank or a water heater; a heat pump or a compressor should stay hourly or use longer slots.
+* With ``"SlotMinutes": 15`` the script plans and switches heating by 15-minute price slots. ``HeatingTime`` and ``TimePeriod`` are still set in hours; ``HeatingTime: 10`` means the 40 cheapest quarter-hours of the period. Other slot lengths (30, 120, 180, 240) use the average market price and the average network fee of the slot, and ``HeatingTime`` is rounded down to whole slots (``240`` needs ``HeatingTime`` of at least 4; the rounding is logged). ``AlwaysOnPrice``, ``AlwaysOffPrice`` and ``MaxFullPrice`` apply to each slot.
+* Up to four schedules are created, one for each quarter of the hour (minute 0, 15, 30 and 45). The relay turns off one slot and 10 seconds after each start, so consecutive slots keep it on.
+* Prices are fetched from Elering in 6-hour parts to keep the memory peak low. The calculation runs between minute 46 and 55 of the last hour of the day, or of each period when ``IsForecastUsed`` is on, after the hour's last slot has started. With ``TimePeriod`` 0 the weather forecast is not used, even if ``IsForecastUsed`` is true.
+* ``ExistingSchedule`` in KVS is a list of schedule IDs. A single ID from version 4.9 is migrated automatically, and the watchdog deletes all listed schedules.
+* On the autumn DST day the repeated 03:00 hour is planned as separate slots but a schedule fires once per clock time, so that night heats up to one hour less than planned. With slots longer than an hour the incomplete last slot of a DST day is not planned, so the relay is off by midnight.
+* Quarter-hour slots save money only with a contract billed by the quarter-hour.
+
+### Running the tests
+The tests run the script in Node.js 24 with mocked Shelly APIs and recorded Elering and Open-Meteo answers, no external packages:
+```
+npm test
+```
+``npm test`` compares the transient data size with version 4.9. The engine memory is measured separately in the Espruino interpreter that the Shelly script engine is based on:
+```
+tests/espruino/build-espruino.sh
+npm run test:memory
+```
+The build script compiles Espruino 2v29 (commit ``e73051a``) with ``tests/espruino/espruino-shelly.patch`` as a static 32-bit binary in Docker, so a variable block takes 14 bytes as on the ESP32 (``--native`` builds with the host compiler, 18 byte blocks on 64-bit). ``npm run test:memory`` runs one calculation cycle of version 4.9 and of the current script on the recorded normal, DST and negative price days with four settings (default hourly, storage tank 15 min, hot water 15 min, whole day 15 min), reads the peak and the retained memory from ``process.memory()``, checks that the script still plans the same schedules within 25 kB, that the current peak is not higher than in version 4.9 and that the memory kept after the cycle stays under 8 kB (two instances share the script memory). Shelly's own engine and firmware differ from Espruino, so check ``mem_peak`` on the device after updating.
 
 ## Monitoring and edit schedule
 
 > [!NOTE]
-> Starting from the script version 3.9 (January 2025), this script creates a single scheduler using an advanced timespec that includes all the required heating hours.
+> Since version 3.9 (January 2025) the script creates one schedule whose timespec lists all the heating hours. With ``SlotMinutes`` below 60 there is one such schedule per quarter of the hour, up to four.
 
 ## How to check the Heating Schedule
 To view the heating hours created by the script:
@@ -90,8 +113,8 @@ To view the heating hours created by the script:
 > The next time the script calculates a new schedule, it will generate a fresh schedule with the updated timespec.
 
 **How to monitor script execution**  
-The field ``LastCalculation`` in KVS is updated each time electricity prices are retrieved from Elering and a heating schedule is generated for the next heating period.  
-The field ``ExistingSchedule`` in KVS is the scheduleID created by this script.
+The field ``LastCalculation`` in KVS is updated each time the schedules are replaced, after a price calculation and after the fallback schedule.  
+The field ``ExistingSchedule`` in KVS is the list of schedule IDs created by this script (one per quarter of the hour with ``SlotMinutes`` below 60).
 
 ## Configuring Script parameters
 
@@ -116,14 +139,15 @@ let c = {
     tPer: 24,       // KVS:TimePeriod VC:Heating Period (h) 24/12/6/0
     hTim: 10,       // KVS:HeatingTime VC:Heating Time (h/period)
     isFc: false,    // KVS:IsForecastUsed VC:Forecast Heat
-    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL)
+    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1)
     lowR: 1,        // KVS:AlwaysOnPrice VC:Heat On (min price) (EUR/MWh)
     higR: 300,      // KVS:AlwaysOffPrice VC:Heat Off (max price) (EUR/MWh)
+    fulR: 0,        // KVS:MaxFullPrice (optional) VC: N/A, heat off if the full price (market + network + charges, VAT included) is higher (EUR/MWh), 0 = not used
     Inv: false,     // KVS:InvertedRelay VC:Inverted Relay
     rId: 0,         // KVS:RelayId VC: N/A, always first relay (0)
     cnty: "ee",     // KVS:Country VC:Market Price Country (ee, fi, lv, lt)
     hCur: 0,        // KVS:HeatingCurve VC:Heating Curve 
-    tmr: 60,        // Default timer
+    sltM: 60,       // KVS:SlotMinutes (optional) VC: N/A, price slot length 15, 30, 60, 120, 180 or 240 min; 60 = hourly averages as before v5
     pFac: 0.5,      // Power factor
     mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
 }
@@ -131,7 +155,7 @@ let c = {
 
 ### Configuration using KVS 
 If the script in **KVS mode**, then settings can be modified via the device's web page using its IP address: Menu → Advanced → KVS.  
-All the user settings are stored in JSON format under the key ``SmartHeatingConf``.
+All the user settings are stored in JSON format under the key ``SmartHeatingConf``. A key at its default value (``InvertedRelay`` false, ``RelayId`` 0, ``HeatingCurve`` 0, ``ManualKVS`` false, ``MaxFullPrice`` 0, ``SlotMinutes`` 60) is left out of the stored value and may be added by hand: a KVS value holds 253 bytes with every quote escaped, so the full configuration would not fit.
 
 > [!IMPORTANT]
 > Starting from the version 4.2, script configuration settings are stored in JSON format in KVS.  
@@ -163,10 +187,10 @@ These options are described in the following table.
 |``"TimePeriod": 12,``<br>``"HeatingTime": 6,``<br>``"IsForecastUsed": false``|Heating is activated during the **six** most cost-effective hours within every **12-hour** period.|Big water tank 1000L or more with heavy usage.
 |``"TimePeriod": 12,``<br>``"HeatingTime": 2,``<br>``"IsForecastUsed": false``|Heating is activated during the **two** most cost-effective hours within every **12-hour** period. |A 150L hot water boiler for a little household.
 |``"TimePeriod": 6,``<br>``"HeatingTime": 2,``<br>``"IsForecastUsed": false``|Heating is activated during the **two** most cost-effective hours within every **6-hour** period.|A 200L hot water boiler for a household with four or more people.
-|``"TimePeriod": 0,``<br>``"HeatingTime": 0,``<br>``"IsForecastUsed": false``|Heating is only activated during hours when the **price is lower** than the specified ``alwaysOnLowPrice``.|
+|``"TimePeriod": 0,``<br>``"HeatingTime": 0,``<br>``"IsForecastUsed": false``|Heating is only activated during slots when the **price is lower** than the specified ``AlwaysOnPrice`` (and not above ``AlwaysOffPrice`` or ``MaxFullPrice``). The weather forecast is not used without a period.|
 
 #### ``"EnergyProvider": "VORK1"``
-Defines the Elektrilevi or Imatra electricity transmission tariff package. Options include VORK1, VORK2, VORK4, VORK5, Partner24, Partner24Plus, Partner12, Partner12Plus, and NONE. Select None to ignore transmission fees. 
+Defines the Elektrilevi, Imatra or Latvian electricity transmission tariff package. The exact keys are VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1 and NONE; an unknown key is logged and treated as NONE. Select NONE to ignore transmission fees. 
 Please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vorguleping/vorgupaketid/eramu) or [Imatra page](https://imatraelekter.ee/vorguteenus/vorguteenuse-hinnakirjad/). Options are the following.
 
 |Network package|Description||
@@ -179,6 +203,8 @@ Please check the details in this [Elektrilevi page](https://elektrilevi.ee/en/vo
 |``PARTN24PL``|Imatra<br> Day and night basic rate 39 EUR/MWh|  |
 |``PARTN12``|Imatra<br> Day 72 EUR/MWh <br> Night 42 EUR/MWh| Summer Daytime: MO-FR at 8:00–24:00.<br>Summer Night time: MO-FR at 0:00–08:00, SA-SU all day <br> Winter Daytime: MO-FR at 7:00–23:00.<br>Winter Night time: MO-FR at 23:00–7:00, SA-SU all day |
 |``PARTN12PL``|Imatra<br> Day 46 EUR/MWh <br> Night 27 EUR/MWh|Summer Daytime: MO-FR at 8:00–24:00.<br>Summer Night time: MO-FR at 0:00–08:00, SA-SU all day <br> Winter Daytime: MO-FR at 7:00–23:00.<br>Winter Night time: MO-FR at 23:00–7:00, SA-SU all day|
+|``PAMATA1``|**Sadales tīkls (Latvia)**<br>Day/night 39.62 EUR/MWh||
+|``SPECIAL1``|**Sadales tīkls (Latvia)**<br>Day/night 158.48 EUR/MWh||
 |``NONE``|Network fee is set to 0 and it will not taken into account.||
 
 #### ``"AlwaysOnPrice": 10``
@@ -186,6 +212,12 @@ Keep heating always on if the electricity market price lower than this value (EU
 
 #### ``"AlwaysOffPrice": 300``
 Keep heating always OFF if electricity market price higher than this value (EUR/MWh).
+
+#### ``"MaxFullPrice": 0``
+Optional. Keep heating OFF in every price slot whose full price is higher than this value (EUR/MWh, VAT included), also in the slots that ``AlwaysOnPrice`` would switch on and when ``TimePeriod`` is 0. The full price is the market price plus the network fee of ``EnergyProvider`` plus the fixed charges, all with VAT. Use it to compare electricity with another fuel on the price you pay on the bill: for example 110 means 11 c/kWh. ``0`` or a missing key switches the check off, and the key is stored in KVS only when it is set. The fixed charges and the VAT rate are known for Estonia only (``"Country": "ee"``: renewable energy 8.4, excise 2.1, security of supply 7.58, balancing capacity 3.73 EUR/MWh and VAT 24 % in 2026); for another country the limit is ignored and the script logs it. KVS only, there is no virtual component for it: in Virtual Component mode add the key to the ``SmartHeatingConf<id>`` JSON in KVS, the other keys may stay out.
+
+#### ``"SlotMinutes": 60``
+Optional. Length of one price slot in minutes: ``15``, ``30``, ``60``, ``120``, ``180`` or ``240``. ``60`` (default) plans by hourly average prices and switches the relay once an hour, like the versions before 5.0; ``15`` plans by the quarter-hour prices and switches every 15 minutes; longer slots average the prices over 2, 3 or 4 hours and switch once per slot, which suits heat pumps and other devices that must not cycle often. The slot must divide ``TimePeriod`` into whole slots (``240`` needs a period of 4, 8, 12 or 24 hours); any other value is logged and treated as ``60``. ``HeatingTime`` is rounded down to whole slots and the rounding is logged. KVS only, there is no virtual component for it: in Virtual Component mode add the key to the ``SmartHeatingConf<id>`` JSON in KVS, the other keys may stay out. The key is stored only when it differs from ``60``.
 
 #### ``"InvertedRelay": false``
 Configures the relay state to either normal or inverted.
@@ -203,10 +235,10 @@ Specifies the country for energy prices. Only countries available in the Elering
 * ``lv`` - Latvia
 
 #### ``"HeatingCurve": 0``
-Forecast impact increases or decreases the number of hours calculated by the algorithm based on the weather forecast. Default ``0``, shifting by 1 equals 1h. This setting is applicable only if weather forecast used.
+Forecast impact increases or decreases the number of hours calculated by the algorithm based on the weather forecast. Default ``0``; one step is one hour of heating a day (half an hour per 12-hour period). This setting is applicable only if weather forecast used.
 Check heating curve impact for [heating time dependency graphs](https://github.com/LeivoSepp/Smart-heating-management-with-Shelly?tab=readme-ov-file#heating-curve).
-    * ``-6`` - less heating
-    * ``6`` - more heating
+    * ``-6`` - 6 hours a day less heating
+    * ``6`` - 6 hours a day more heating
 
 # How to Install this Script
 
@@ -246,18 +278,26 @@ let c = {
     tPer: 24,       // KVS:TimePeriod VC:Heating Period (h) 24/12/6/0
     hTim: 10,       // KVS:HeatingTime VC:Heating Time (h/period)
     isFc: false,    // KVS:IsForecastUsed VC:Forecast Heat
-    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL)
+    pack: "VORK2",  // KVS:EnergyProvider VC:Network Package (NONE, VORK1, VORK2, VORK4, VORK5, PARTN24, PARTN24PL, PARTN12, PARTN12PL, PAMATA1, SPECIAL1)
     lowR: 1,        // KVS:AlwaysOnPrice VC:Heat On (min price) (EUR/MWh)
     higR: 300,      // KVS:AlwaysOffPrice VC:Heat Off (max price) (EUR/MWh)
+    fulR: 0,        // KVS:MaxFullPrice (optional) VC: N/A, heat off if the full price (market + network + charges, VAT included) is higher (EUR/MWh), 0 = not used
     Inv: false,     // KVS:InvertedRelay VC:Inverted Relay
     rId: 0,         // KVS:RelayId VC: N/A, always first relay (0)
     cnty: "ee",     // KVS:Country VC:Market Price Country (ee, fi, lv, lt)
     hCur: 0,        // KVS:HeatingCurve VC:Heating Curve 
-    tmr: 60,        // Default timer
+    sltM: 60,       // KVS:SlotMinutes (optional) VC: N/A, price slot length 15, 30, 60, 120, 180 or 240 min; 60 = hourly averages as before v5
     pFac: 0.5,      // Power factor
     mnKv: false,    // Forcing script to KVS mode (true) or Virtual components mode (false)
 }
 ```
+
+## Device notes
+
+* The script engine on the device overflows its stack at about five nested JavaScript calls; the script keeps every continuation in a callback and the hot loops inline. Keep new code within four nested calls from a callback, the Node tests do not catch this.
+* Upload the script with ``tools/deploy.py`` (``python3 tools/deploy.py main 192.168.x.x``): it strips the comments (the device copy is then about 33 kB instead of 49 kB, a larger upload has rebooted a Plus 1PM), converts the text to ASCII (``Script.PutCode`` rejects other characters), uploads in 1 kB chunks, reads the code back and starts the script. ``tools/deploy.py verify`` prints the script status, the relay timer, KVS and the schedules; ``tools/deploy.py kvs`` sets a configuration value.
+* The device log (``ws://192.168.x.x/debug/log``, enabled by default) shows the script's prints and errors; ``tools/deploy.py log 60`` captures it for a minute.
+* A KVS value holds 253 bytes with every quote escaped, see [Configuration using KVS](#configuration-using-kvs).
 
 ## Updating Script
 
@@ -289,7 +329,7 @@ let c = {
 1. Internet Connection: 
     * The script needs the internet to download daily electricity prices and weather forecasts.
 2. Daily Operation:
-    * It runs every day after 23:00 or as needed during the day to set up heating times.
+    * It runs every day after 23:45 or as needed during the day to set up heating times.
 3. Workflow:
     * The script follows a flowchart to determine the best heating hours based on market prices and weather forecasts.
 
@@ -321,7 +361,7 @@ flowchart TD
 
 * <p>When the script is stopped, the schedule is deleted. Shelly only follows the heating algorithm when the script is running.</p>
 * <p>Two script instances can run in parallel, however, if the first is in Virtual Components mode, then the second instance can run only in KVS-mode on the same device.</p>
-* <p>Up to two instances of this script can run concurrently in KVS mode, both employing different algorithm. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly Plus 2PM.</p>
+* <p>Up to two instances of this script can run concurrently in KVS mode, both employing different algorithm. These instances can either operate with the same switch output using Shelly Plus 1 or use different switch outputs, as supported by devices like Shelly Plus 2PM. Instances that share a relay must use the same ``SlotMinutes`` and ``InvertedRelay``: the last calculation sets the relay's auto-off timer for both.</p>
 * <p>This script creates a special "watchdog" script. This "watchdog" script ensures proper cleanup when the heating script is stopped or deleted.</p>
 * <p>To mitigate the impact of internet outages, this script uses parameter ``heating time`` to turn on heating based on historically cheap hours.</p>
 * <p>The "Run on startup" button for this script must be activated. This setting ensures that the script starts after a power outage, restart, or firmware update.</p>
@@ -341,7 +381,7 @@ In error mode, Shelly divides the heating time bsaed on the configured periods.
 
 **Failure scenarios:**
 1. Shelly is working, but the internet goes down due to a home router crash or internet provider malfunction. Shelly time continues running.
-2. After a power outage, the internet is not working, and Shelly has no time.
+2. After a power outage, the internet is not working, and Shelly has no time: the script waits for the clock and plans as soon as it is set (schedules cannot fire without a clock).
 3. Elering HTTP error occurs, and the Elering server is not reachable.
 4. Elering API failure happens, and the service is down.
 5. Elering API returns incorrect data, and prices are missing.
@@ -418,7 +458,7 @@ Heating time is influenced by the insulation of your household. For instance, an
 
 To account for these differences, the script includes the parameter ``heatingCurve``, allowing users to customize the heating curve based on their specific household characteristics.
 
-* 24 hour period graph represents visually how heating time varies with outside temperature and the ``heatingCurve`` parameter which shifts the heating curve to the left or right, whereas shifting 1 equals 1h. The Shelly device has a maximum limit of 20 schedulers, representing the maximum heating hours the script can manage within a 24-hour period. If more heating hours are needed, the script employs a 12-hour algorithm.
+* 24 hour period graph represents visually how heating time varies with outside temperature and the ``heatingCurve`` parameter which shifts the heating curve to the left or right, one step is one hour a day.
 
 <img src="images/HeatingCurve24.jpg" alt="Heating curve for 24h period" width="750">
 
@@ -428,7 +468,7 @@ ____
 
 <img src="images/HeatingCurve12.jpg" alt="Heating curve for 12h period" width="750">
 
-For those interested in the mathematical aspect, the linear equation used to calculate heating time is: ``(Temperature Forecast) * PowerFactor + (Temperature Forecast + heatingCurve)``.
+For those interested in the mathematical aspect, the heating hours a day are ``(16 - T) * PowerFactor + HeatingCurve - 2`` with the "feels like" forecast average ``T`` and ``PowerFactor`` 0.5: no heating above 16 °C, 6 hours at 0 °C and 11 hours at -10 °C with ``HeatingCurve`` 0, at most the whole period. A period of 12 or 6 hours gets its share of the day, rounded down to whole slots. The tables in the script header list the hours.
 
 ## Time Period Algorithm
 
@@ -488,11 +528,11 @@ To access the stored data on the Shelly device web page, navigate to **Advanced 
 
 2. Key: ``LastCalculation`` Value: ``Fri Dec 27 2024 23:29:20 GMT+0200`` 
    
-   This timestamp indicates the time when the script successfully retrieved market prices from Elering and created schedules. While this information is primarily for your reference, it offers insights into the timeline of script activities.
+   This timestamp indicates the time when the script last replaced its schedules, after a price calculation or the fallback schedule. While this information is primarily for your reference, it offers insights into the timeline of script activities.
 
-1. Key: ``ExistingSchedule`` Value: ``1``
+1. Key: ``ExistingSchedule`` Value: ``[12,13,14,15]``
    
-    The numeric values represent schedule ID number created by the script. This information is crucial for each script to identify and manage schedule associated with it. It aids in the proper deletion of outdated schedules when creating new ones is necessary.
+    The IDs of the schedules created by the script, one per quarter of the hour with ``SlotMinutes`` below 60. The script deletes exactly these schedules before it creates new ones, and the watchdog deletes them when the script stops.
 
 3. Key: ``Version`` Value: ``4.3`` 
    

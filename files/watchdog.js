@@ -1,30 +1,43 @@
 //This is a watchdog reference code
-let scId = 0;
 Shelly.addStatusHandler(function (res) {
-    if (res.name === 'script' && !res.delta.running) {
-        scId = res.id;
-        strt();
+    if (res.name === 'script' && res.delta.running === false) {
+        strt(res.id);
     }
 });
-function strt() {
+function strt(scId) {
     Shelly.call('KVS.Get', { key: "SmartHeatingSys" + scId },
         function (res) {
             if (res) {
-                delS(JSON.parse(res.value));
+                try {
+                    delS(JSON.parse(res.value), scId);
+                } catch (e) {
+                    print('Script #' + scId, 'SystemData is not valid JSON, schedules are not deleted by watchdog.');
+                }
             }
         });
 }
-function delS(sDat) {
-    Shelly.call("Schedule.Delete", { id: sDat.ExistingSchedule },
-        function (res, err, msg, data) {
-            if (err !== 0) { print('Script #' + scId, 'schedule ', data.id, ' deletion by watchdog failed.'); }
-            else { print('Script #' + scId, 'schedule ', data.id, ' deleted by watchdog.'); }
-        }, { id: sDat.ExistingSchedule }
-    );
-    updK(sDat);
+// ExistingSchedule is a list of schedule IDs since v5.0, before it was one ID
+function delS(sDat, scId) {
+    const ids = typeof sDat.ExistingSchedule === "number" ? (sDat.ExistingSchedule > 0 ? [sDat.ExistingSchedule] : []) : sDat.ExistingSchedule || [];
+    if (ids.length === 0) {
+        return;
+    }
+    sDat.ExistingSchedule = [];
+    delN(ids, sDat, scId);
 }
-function updK(sDat) {
-    sDat.ExistingSchedule = 0;
-    Shelly.call("KVS.set", { key: "SmartHeatingSys" + scId, value: JSON.stringify(sDat) },);
+// Delete the schedules one at a time to stay within the RPC call limit, then store the IDs that still exist
+function delN(ids, sDat, scId) {
+    if (ids.length === 0) {
+        Shelly.call("KVS.set", { key: "SmartHeatingSys" + scId, value: JSON.stringify(sDat) });
+        return;
+    }
+    const id = ids.pop();
+    Shelly.call("Schedule.Delete", { id: id },
+        function (res, err) {
+            if (err !== 0 && err !== -105) {    //-105: not found, already gone
+                sDat.ExistingSchedule.push(id);
+            }
+            print('Script #' + scId, 'schedule ', id, err === 0 ? ' deleted by watchdog.' : err === -105 ? ' already gone.' : ' deletion by watchdog failed.');
+            delN(ids, sDat, scId);
+        });
 }
-

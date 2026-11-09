@@ -1,0 +1,243 @@
+diff --git a/boards/LINUX_SHELLY.py b/boards/LINUX_SHELLY.py
+new file mode 100644
+index 0000000..6c361bb
+--- /dev/null
++++ b/boards/LINUX_SHELLY.py
+@@ -0,0 +1,38 @@
++#!/bin/false
++# Linux build with the ESP32 variable format (16383 vars, 14 bit refs, JSVAR_MALLOC) for
++# measuring Shelly script memory. ESPRUINO_VARS sets the variable count at start up.
++# A 32-bit (i386) build has the 14 byte variables of the ESP32, a 64-bit build 18 bytes.
++import pinutils;
++info = {
++ 'name' : "Linux build with ESP32 variable format",
++ 'default_console' : "EV_USBSERIAL",
++ 'variables' : 16383,
++ 'binary_name' : 'espruino',
++ 'build' : {
++   'libraries' : [],
++   'makefile' : [
++     'DEFINES+=-DJSVAR_MALLOC',
++     'DEFINES+=-DUSE_CALLFUNCTION_HACK', # required by i386 builds, works on 64-bit too
++     'LINUX=1',
++   ]
++ }
++};
++chip = {
++  'part' : "LINUX",
++  'family' : "LINUX",
++  'package' : "",
++  'ram' : 0,
++  'flash' : 256,
++  'speed' : -1,
++  'usart' : 6,
++  'spi' : 3,
++  'i2c' : 3,
++  'adc' : 0,
++  'dac' : 0,
++};
++devices = {
++  'USB' : {}
++};
++def get_pins():
++  pins = pinutils.generate_pins(0,32)
++  return pins
+diff --git a/src/jsvar.c b/src/jsvar.c
+index b5e6c66..12a4210 100644
+--- a/src/jsvar.c
++++ b/src/jsvar.c
+@@ -613,6 +613,22 @@ void jsvResetVariable(JsVar *v, JsVarFlags flags) {
+   //};
+ }
+ 
++// Peak of jsvGetMemoryUsage() since the last jsvResetPeakMemoryUsage(), checked after every allocation
++static unsigned int peakMemoryUsage = 0;
++
++static void jsvUpdatePeakMemoryUsage() {
++  unsigned int usage = jsvGetMemoryUsage();
++  if (usage > peakMemoryUsage) peakMemoryUsage = usage;
++}
++
++unsigned int jsvGetPeakMemoryUsage() {
++  return peakMemoryUsage;
++}
++
++void jsvResetPeakMemoryUsage() {
++  peakMemoryUsage = jsvGetMemoryUsage();
++}
++
+ JsVar *jsvNewWithFlags(JsVarFlags flags) {
+   if (isMemoryBusy) {
+     jsErrorFlags |= JSERR_MEMORY_BUSY;
+@@ -640,6 +656,7 @@ JsVar *jsvNewWithFlags(JsVarFlags flags) {
+     } while (!__sync_bool_compare_and_swap(&jsVarFirstEmpty, empty, next));
+     assert(v->flags == JSV_UNUSED);*/
+     jsvResetVariable(v, flags); // setup variable, and add one lock
++    jsvUpdatePeakMemoryUsage();
+     // return pointer
+     return v;
+   }
+@@ -1054,6 +1071,7 @@ JsVar *jsvNewFlatStringOfLength(unsigned int byteLength) {
+   are trying to create a flat string in an IRQ while trying to
+   make one outside the IRQ too */
+   touchedFreeList = true;
++  jsvUpdatePeakMemoryUsage();
+   // and we're done
+   return flatString;
+ }
+diff --git a/src/jsvar.h b/src/jsvar.h
+index 022a399..3be2792 100644
+--- a/src/jsvar.h
++++ b/src/jsvar.h
+@@ -297,6 +297,8 @@ void jsvSoftKill(); ///< called when saving to flash - clears empty list to ensu
+ JsVar *jsvFindOrCreateRoot(); ///< Find or create the ROOT variable item - used mainly if recovering from a saved state.
+ unsigned int jsvGetMemoryUsage(); ///< Get number of memory records (JsVars) used
+ unsigned int jsvGetMemoryTotal(); ///< Get total amount of memory records
++unsigned int jsvGetPeakMemoryUsage(); ///< Most memory records used at once since jsvResetPeakMemoryUsage
++void jsvResetPeakMemoryUsage(); ///< Start a new peak from the current usage
+ bool jsvIsMemoryFull(); ///< Get whether memory is full or not
+ bool jsvMoreFreeVariablesThan(unsigned int vars); ///< Return whether there are more free variables than the parameter (faster than checking no of vars used)
+ void jsvShowAllocated(); ///< Show what is still allocated, for debugging memory problems
+diff --git a/src/jswrap_process.c b/src/jswrap_process.c
+index 3a66aca..4b40ca4 100644
+--- a/src/jswrap_process.c
++++ b/src/jswrap_process.c
+@@ -255,6 +255,7 @@ JsVar *jswrap_process_memory(JsVar *gc) {
+       jsvObjectSetFloatChild(obj, "gctime", jshGetMillisecondsFromTime(time2-time1));
+     }
+     jsvObjectSetIntChild(obj, "blocksize", sizeof(JsVar));
++    jsvObjectSetIntChild(obj, "peak", (JsVarInt)jsvGetPeakMemoryUsage());
+ #ifndef SAVE_ON_FLASH
+     JsVar *rx = jsvNewObject();
+     jsvObjectSetIntChild(rx, "used", jshGetEventsUsed());
+@@ -281,3 +282,12 @@ JsVar *jswrap_process_memory(JsVar *gc) {
+   }
+   return obj;
+ }
++
++/*JSON{
++  "type" : "staticmethod",
++  "class" : "process",
++  "name" : "resetPeakMemory",
++  "generate" : "jsvResetPeakMemoryUsage"
++}
++Start a new memory peak (`process.memory().peak`) from the current usage.
++ */
+diff --git a/targets/linux/jshardware.c b/targets/linux/jshardware.c
+index 0e7976d..14f5485 100644
+--- a/targets/linux/jshardware.c
++++ b/targets/linux/jshardware.c
+@@ -531,6 +531,9 @@ JsVarFloat jshGetMillisecondsFromTime(JsSysTime time) {
+ JsSysTime baseSystemTime = 0;
+ #endif
+ 
++static bool isVirtualTimeSet = false;
++static JsSysTime virtualSystemTime = 0;
++
+ JsSysTime jshGetSystemTime() {
+ #ifdef USE_WIRINGPI
+   /* use micros, and cope with wrapping...
+@@ -543,6 +546,7 @@ JsSysTime jshGetSystemTime() {
+   lastUs = us;
+   return baseSystemTime + (JsSysTime)us;
+ #else
++  if (isVirtualTimeSet) return virtualSystemTime;
+   struct timeval tm;
+   gettimeofday(&tm, 0);
+   return (JsSysTime)(tm.tv_sec)*1000000L + tm.tv_usec;
+@@ -552,6 +556,10 @@ JsSysTime jshGetSystemTime() {
+ void jshSetSystemTime(JsSysTime time) {
+ #ifdef USE_WIRINGPI
+   baseSystemTime = time - micros();
++#else
++  // A frozen clock set from JS with setTime(): lets memory tests replay a fixed day
++  isVirtualTimeSet = true;
++  virtualSystemTime = time;
+ #endif
+ }
+ 
+diff --git a/targets/linux/main.c b/targets/linux/main.c
+index af32106..e3ab678 100644
+--- a/targets/linux/main.c
++++ b/targets/linux/main.c
+@@ -418,7 +418,6 @@ int main(int argc, char **argv) {
+ 
+   STACK_BASE = (void *)&i; // used for jsuGetFreeStack on Linux
+ 
+-  const char *singleArg = 0;
+   for (i = 1; i < argc; i++) {
+     if (argv[i][0] == '-') {
+       // option
+@@ -497,33 +496,40 @@ int main(int argc, char **argv) {
+       }
+     } else {
+       args++;
+-      singleArg = argv[i];
+     }
+   }
+ 
+   if (args == 0) {
+     warning("Interactive mode.");
+-  } else if (args == 1) {
+-    // single file - just run it
+-    char *buffer = read_file(singleArg);
+-    if (!buffer)
+-      perror_exit(1, singleArg);
+-    // check for '#' as the first char, and if so, skip the first line
+-    char *cmd = buffer;
+-    if (cmd[0] == '#') {
+-      while (cmd[0] && cmd[0] != '\n')
+-        cmd++;
+-      if (cmd[0] == '\n')
+-        cmd++;
+-    }
++  } else {
++    // Files run one after another in the same interpreter, e.g. mocks, a script and a test driver
+     jshInit();
+     jswHWInit();
+-    jsvInit(JSVAR_CACHE_SIZE);
++    // ESPRUINO_VARS limits the variable pool, e.g. to the RAM a Shelly gives a script
++    const char *varCount = getenv("ESPRUINO_VARS");
++    jsvInit(varCount ? (unsigned int)atoi(varCount) : JSVAR_CACHE_SIZE);
+     jsiInit(false /* do not autoload!!! */);
+     addNativeFunction("quit", nativeQuit);
+-    jsvUnLock(jspEvaluate(cmd, false));
+-    int errCode = handleErrors();
+-    free(buffer);
++    char **buffers = malloc(sizeof(char*) * (size_t)argc);
++    int bufferCount = 0;
++    int errCode = 0;
++    for (i = 1; i < argc && !errCode; i++) {
++      char *buffer = read_file(argv[i]);
++      if (!buffer)
++        perror_exit(1, argv[i]);
++      buffers[bufferCount++] = buffer;
++      // check for '#' as the first char, and if so, skip the first line
++      char *cmd = buffer;
++      if (cmd[0] == '#') {
++        while (cmd[0] && cmd[0] != '\n')
++          cmd++;
++        if (cmd[0] == '\n')
++          cmd++;
++      }
++      // Static: function code points into the file buffer instead of copies in the variable pool, as on a device running from flash
++      jsvUnLock(jspEvaluate(cmd, true));
++      errCode = handleErrors();
++    }
+     isRunning = !errCode;
+     bool isBusy = true;
+     while (isRunning && (jsiHasTimers() || isBusy))
+@@ -531,11 +537,9 @@ int main(int argc, char **argv) {
+     jsiKill();
+     jsvKill();
+     jshKill();
++    while (bufferCount) free(buffers[--bufferCount]);
++    free(buffers);
+     exit(errCode);
+-  } else {
+-    warning("Unknown arguments!");
+-    show_help();
+-    exit(1);
+   }
+ 
+   warning("Size of JsVar is now %d bytes", (int)sizeof(JsVar));

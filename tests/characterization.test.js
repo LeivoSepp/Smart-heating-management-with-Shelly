@@ -9,7 +9,7 @@ const oracle = require('./oracle');
 const {
     SCRIPT_VERSION, DEFAULT_CONF, STORAGE_TANK_CONF, HOT_WATER_CONF,
     NORMAL_DAY, HOT_WATER_DAY, NEGATIVE_DAY, SPRING_DST_DAY, AUTUMN_DST_DAY,
-    HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY, GEN2_PRO_DEVICE, GEN3_DEVICE,
+    HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY, GEN2_PRO_DEVICE, GEN3_DEVICE, GEN4_DEVICE,
     MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS,
 } = require('./settings');
 
@@ -20,6 +20,8 @@ const GROUP_MEMBER_COUNT = 9;
 const OWN_COMPONENT_COUNT = GROUP_MEMBER_COUNT + 1;
 const GROUP_KEY = 'group:200';
 const VERSION_BEFORE_VIRTUAL_COMPONENTS = 4.1;
+const PRO_FIRMWARE_IN_KVS_MODE = ['1.4.2', '1.4.3'];
+const FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE = '1.4.4';
 const FORECAST_OF_8_HOURS = new Array(HOURS_PER_DAY).fill(-4);
 const FORECAST_OF_7_AND_A_HALF_HOURS = new Array(HOURS_PER_DAY).fill(-3);
 const SWITCH_ON = [{ method: 'Switch.Set', params: { id: 0, on: true } }];
@@ -336,11 +338,28 @@ describe('Virtual Component mode', () => {
         assert.deepEqual(sim.timespecs(), expectedTimespec(NORMAL_DAY, {}));
     });
 
-    it('is used on a Gen2 Pro device as well', () => {
-        const sim = run({ deviceInfo: GEN2_PRO_DEVICE });
-        assert.equal(sim.components.length, OWN_COMPONENT_COUNT);
-        assert.equal('SmartHeatingConf1' in sim.kvs, false);
-    });
+    const proWithFirmware = (firmware) => Object.assign({}, GEN2_PRO_DEVICE, { ver: firmware });
+    const OTHER_DEVICES_WITH_VIRTUAL_COMPONENTS = [
+        ['Gen2 Pro', GEN2_PRO_DEVICE],
+        ['Gen2 Pro on firmware ' + FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE, proWithFirmware(FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE)],
+        ['Gen4', GEN4_DEVICE],
+    ];
+    for (const [name, deviceInfo] of OTHER_DEVICES_WITH_VIRTUAL_COMPONENTS) {
+        it(`is used on a ${name} device as well`, () => {
+            const sim = run({ deviceInfo });
+            assert.equal(sim.components.length, OWN_COMPONENT_COUNT);
+            assert.equal('SmartHeatingConf1' in sim.kvs, false);
+        });
+    }
+
+    for (const firmware of PRO_FIRMWARE_IN_KVS_MODE) {
+        it(`gives way to KVS mode on a Gen2 Pro with firmware ${firmware}`, () => {
+            const sim = run({ deviceInfo: proWithFirmware(firmware) });
+            assert.ok(hasLogged(sim, 'Script in KVS mode'));
+            assert.equal(sim.components.length, 0);
+            assert.deepEqual(sim.storedJson('SmartHeatingConf1'), DEFAULT_CONF);
+        });
+    }
 
     it('gives way to KVS mode on a Gen3 device with ManualKVS', () => {
         const sim = run({ deviceInfo: GEN3_DEVICE, kvs: kvsWith({ ManualKVS: true }) });

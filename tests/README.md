@@ -22,12 +22,13 @@ Node 22 or newer, no dependencies. `node --test` and running one file work as we
 
 The Elering files are ISO-8859-1, as Elering serves them. The only character outside ASCII is in the header line, which the script skips. Each file covers the planned day and a few hours around it. The simulation answers a request with the rows from `start` to `end`, both included. Elering does the same, checked against the live service with the address the script builds: one day gives 97 rows. The 25 hour day is planned from prices only because of that last row.
 
-The tests pin what the script does today, also where that differs from the price list or the calendar. `oracle.js` follows the price list and the calendar day, so these cases are pinned with literal values, without it:
+The tests pin what the script does today, also where that differs from the price list, the calendar or its own comments. `oracle.js` follows the price list and the calendar day, so these cases are pinned with literal values, without it:
 
 - On a winter weekend morning the script charges the weekday peak rate.
 - Imatra summer or winter hours follow the clock of the device, not the hour being priced.
 - The plan of the 23 hour day 2026-03-29 contains hour 0 of the next day.
 - Without a period, the first quarter of the next day counts as hour 0.
+- A Gen2 Pro on firmware 1.4.3 stays in KVS mode, although the comment in the script names 1.4.3 as the first firmware with Virtual Components. 1.4.4 is the first that gets them.
 
 The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the script, because the fee has no other way out of it.
 
@@ -71,7 +72,7 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `Script.Start`, `Script.Stop` | answer `{ was_running }` | Shelly docs, Script, and Gen4 |
 | `HTTP.GET` answer | Elering in `body_b64`, Open-Meteo in `body` | Shelly docs, HTTP: `body` for text and JSON, `body_b64` for binary data. Elering answers with `application/octet-stream`. |
 
-The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode) and a Shelly 1PM Gen3 (Virtual Component mode). All three report firmware 1.7.6. The measurements above come from the two real devices named there, not from these three models.
+The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode), a Shelly 1PM Gen3 and a Shelly 1PM Mini Gen4 (both Virtual Component mode). The Gen2 and Gen3 devices report firmware 1.7.6, the Gen4 reports 2.2.1. They differ only in what `Shelly.getDeviceInfo()` answers, which decides the mode. The limits and error codes are the same for all of them.
 
 ### Assumed error code
 
@@ -93,4 +94,4 @@ A passing test does not prove these. They need a real device.
 - The size of an HTTP answer.
 - Paging of `Shelly.GetComponents`. The simulation returns every component in one answer. So did the Gen4 with ten components. A Shelly 1 Mini Gen3 on firmware 2.0.3 returned six of ten when the configuration was asked for as well.
 - `Script.PutCode` refusing characters outside ASCII, as seen on a Plus 1PM. The Gen4 accepted them.
-- Other firmware versions and device generations than the ones named above.
+- Differences between device generations and firmware versions. Most rows of the table above were measured on a Gen4 only and are assumed to hold on Gen2 and Gen3. Known differences: a Gen2 Plus has no virtual components, yet the simulation would create them there, and on Gen2 all scripts of a device share one memory pool.

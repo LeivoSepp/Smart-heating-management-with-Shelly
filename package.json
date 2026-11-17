@@ -1,0 +1,11 @@
+{
+  "name": "smart-heating-management-with-shelly",
+  "private": true,
+  "description": "Tests for the Shelly smart heating script",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

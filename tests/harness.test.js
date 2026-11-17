@@ -45,11 +45,9 @@ describe('simulated device limits', () => {
     });
 
     it('gives a new script the lowest free ID and no autostart', () => {
-        const sim = emptyDevice();
-        assert.equal(sim.rpc('Script.Create', { name: 'second' }).result.id, 2);
-        assert.equal(sim.rpc('Script.Create', { name: 'third' }).result.id, 3);
-        sim.scripts = sim.scripts.filter((script) => script.id !== 2);
-        assert.equal(sim.rpc('Script.Create', { name: 'again second' }).result.id, 2);
+        const scripts = [1, 3].map((id) => ({ id, name: 'script ' + id, running: true, enable: true }));
+        const sim = createShelly({ code: '', scripts }).load();
+        assert.equal(sim.rpc('Script.Create', { name: 'new' }).result.id, 2);
         assert.equal(sim.scripts.find((script) => script.id === 2).enable, false);
     });
 
@@ -107,9 +105,17 @@ describe('simulated device limits', () => {
         assert.equal(addComponent(sim, limits.VIRTUAL_ID_FIRST).code, 0);
         assert.equal(addComponent(sim, limits.VIRTUAL_ID_FIRST).code, limits.ERR_ALREADY_EXISTS);
         assert.equal(addComponent(sim, limits.VIRTUAL_ID_LAST + 1).code, limits.ERR_INVALID_ARGUMENT);
+        assert.equal(sim.components.length, 1);
+    });
+
+    it('lets another component type use the same ID', () => {
+        const sim = emptyDevice();
+        assert.equal(addComponent(sim, limits.VIRTUAL_ID_FIRST).code, 0);
         assert.equal(sim.rpc('Virtual.Add', { type: 'boolean', id: limits.VIRTUAL_ID_FIRST, config: {} }).code, 0);
-        assert.equal(sim.rpc('Virtual.Delete', { key: 'enum:' + limits.VIRTUAL_ID_FIRST }).code, limits.ERR_NOT_FOUND);
-        assert.equal(sim.components.length, 2);
+    });
+
+    it('answers Virtual.Delete of a missing component with not found', () => {
+        assert.equal(emptyDevice().rpc('Virtual.Delete', { key: 'number:' + limits.VIRTUAL_ID_FIRST }).code, limits.ERR_NOT_FOUND);
     });
 
     it(`accepts ${limits.RPC_CALL_LIMIT} RPC calls in flight and stops the script at one more`, () => {
@@ -127,6 +133,27 @@ describe('simulated device limits', () => {
         assert.equal(sim.crashed, null);
         sim.setTimer(1000);
         assert.match(String(sim.crashed), /timers active/);
+    });
+
+    it('answers Timer.clear with true for a pending timer and with undefined after that', () => {
+        const sim = emptyDevice();
+        const clearTimer = `Timer.clear(${sim.setTimer(1000)})`;
+        assert.equal(sim.eval(clearTimer), true);
+        assert.equal(sim.eval(clearTimer), undefined);
+    });
+
+    it('gives the callback of a failed RPC call no result, a code and a message', () => {
+        const answer = emptyDevice().rpc('KVS.Get', { key: 'missing' });
+        assert.equal(answer.result, undefined);
+        assert.equal(answer.code, limits.ERR_NOT_FOUND);
+        assert.match(answer.message, /missing/);
+    });
+
+    it('gives the callback of a successful RPC call a result, the code 0 and an empty message', () => {
+        const answer = emptyDevice().rpc('KVS.Set', { key: 'any', value: '1' });
+        assert.notEqual(answer.result, undefined);
+        assert.equal(answer.code, 0);
+        assert.equal(answer.message, '');
     });
 
     it('stops a run that never comes to rest', () => {

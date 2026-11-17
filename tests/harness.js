@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const limits = require('./limits');
 const {
-    DEVICE_TIME_ZONE, NORMAL_DAY, GEN2_DEVICE, HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY,
+    DEVICE_TIME_ZONE, DEVICE_LOCATION, NORMAL_DAY, GEN2_DEVICE, HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY,
     MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS,
 } = require('./settings');
 
@@ -19,7 +19,6 @@ const ELERING_ENCODING = 'latin1';
 const STEP_LIMIT = 100000;
 const WATCHDOG_RUN_SECONDS = 10;
 const MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;
-const LOCATION = { lat: 59.437, lon: 24.7536 };
 const FAKE_CLOCK = `
     (function () {
         const RealDate = Date;
@@ -45,7 +44,7 @@ function ok(result) {
 }
 
 function failed(code, message) {
-    return [null, code, message];
+    return [undefined, code, message];
 }
 
 function eleringRows(fixture) {
@@ -113,8 +112,8 @@ function kvsGet(sim, params) {
 
 function kvsSet(sim, params) {
     const isNewKey = !(params.key in sim.kvs);
-    if (params.key.length > limits.KVS_KEY_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'key\': too long');
-    if (limits.kvsLength(String(params.value)) > limits.KVS_VALUE_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'value\': too long');
+    if (params.key.length > limits.KVS_KEY_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, `Invalid argument 'key': length should be less than ${limits.KVS_KEY_LIMIT}!`);
+    if (limits.kvsLength(String(params.value)) > limits.KVS_VALUE_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'value\': length should be less than 255!');
     if (isNewKey && Object.keys(sim.kvs).length >= limits.KVS_KEY_COUNT_LIMIT) return failed(limits.ERR_RESOURCE_EXHAUSTED, `Reached the maximum ${limits.KVS_KEY_COUNT_LIMIT} of keys`);
     sim.kvs[params.key] = params.value;
     return ok({ etag: 'e', rev: 1 });
@@ -192,12 +191,16 @@ function forecastAnswer(sim, url) {
     return { code: 200, body: JSON.stringify({ hourly: { apparent_temperature: temperatures } }) };
 }
 
+function httpAnswer(sim, url) {
+    if (sim.httpFail && sim.httpFail.test(url)) return failed(limits.ERR_HTTP_FAILURE_ASSUMED, 'Deadline exceeded');
+    if (url.indexOf('dashboard.elering.ee') >= 0) return ok(eleringAnswer(sim, url));
+    if (url.indexOf('api.open-meteo.com') >= 0) return ok(forecastAnswer(sim, url));
+    throw new Error('No simulated answer for ' + url);
+}
+
 function httpGet(sim, params) {
     sim.httpRequests.push(params.url);
-    if (sim.httpFail && sim.httpFail.test(params.url)) return failed(limits.ERR_ASSUMED, 'Deadline exceeded');
-    if (params.url.indexOf('dashboard.elering.ee') >= 0) return ok(eleringAnswer(sim, params.url));
-    if (params.url.indexOf('api.open-meteo.com') >= 0) return ok(forecastAnswer(sim, params.url));
-    throw new Error('No simulated answer for ' + params.url);
+    return httpAnswer(sim, params.url);
 }
 
 function scriptList(sim) {
@@ -257,6 +260,10 @@ function answerOf(sim, method, params) {
     return handler(sim, params || {});
 }
 
+function recordRead(sim, read, answer) {
+    sim.reads.push(Object.assign({}, read, { answer: clone(answer) }));
+}
+
 function shellyApi(sim) {
     return {
         call(method, params, callback, userdata) {
@@ -264,21 +271,23 @@ function shellyApi(sim) {
                 crash(sim, `more than ${limits.RPC_CALL_LIMIT} RPC calls in flight (${method})`);
                 return;
             }
-            sim.calls.push({ method, params: params ? clone(params) : params });
             const [result, code, message] = answerOf(sim, method, params);
+            sim.calls.push({ method, params: params ? clone(params) : params, answer: clone([result, code, message]) });
             sim.callsInFlight++;
             addTask(sim, sim.nowMs, () => {
                 sim.callsInFlight--;
                 if (typeof callback === 'function') callback(result, code, message, userdata);
             });
         },
-        getComponentStatus(type) {
-            if (type === 'sys') return { unixtime: Math.floor(sim.nowMs / MILLISECONDS_PER_SECOND) };
-            return { mem_used: 0, mem_peak: 0 };
+        getComponentStatus(type, id) {
+            const answer = type === 'sys' ? { unixtime: Math.floor(sim.nowMs / MILLISECONDS_PER_SECOND) } : { mem_used: 0, mem_peak: 0 };
+            recordRead(sim, { name: 'getComponentStatus', type, id }, answer);
+            return answer;
         },
         getComponentConfig(type, id) {
-            if (type === 'sys') return { location: Object.assign({}, LOCATION) };
-            return { enable: scriptById(sim, id).enable };
+            const answer = type === 'sys' ? { location: Object.assign({}, DEVICE_LOCATION) } : { enable: scriptById(sim, id).enable };
+            recordRead(sim, { name: 'getComponentConfig', type, id }, answer);
+            return answer;
         },
         getDeviceInfo: () => Object.assign({}, sim.deviceInfo),
         getCurrentScriptId: () => sim.scriptId,
@@ -306,8 +315,9 @@ function timerApi(sim) {
         },
         clear(handle) {
             const timer = sim.timers.find((entry) => entry.handle === handle);
-            if (timer) timer.isCleared = true;
-            return Boolean(timer);
+            if (!timer || timer.isCleared) return undefined;
+            timer.isCleared = true;
+            return true;
         },
     };
 }
@@ -352,6 +362,7 @@ function initialState(deviceOptions) {
         lastTimerHandle: 0,
         tasks: [],
         taskSequence: 0,
+        reads: [],
         callsInFlight: 0,
         crashed: null,
     };
@@ -372,6 +383,7 @@ function createShelly(options) {
         deviceInfo: GEN2_DEVICE,
     }, options);
     const sim = initialState(deviceOptions);
+    sim.options = deviceOptions;
     const shelly = shellyApi(sim);
     const timer = timerApi(sim);
     const log = (...parts) => sim.logs.push(parts.map(String).join(' '));
@@ -418,4 +430,4 @@ function runWatchdog(sim, code, stoppedScriptId) {
     return watchdog;
 }
 
-module.exports = { createShelly, runWatchdog, eleringRows, ROOT };
+module.exports = { createShelly, runWatchdog, eleringRows, ROOT, HEATING_SCRIPT };

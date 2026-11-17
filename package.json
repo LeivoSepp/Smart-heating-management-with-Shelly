@@ -3,7 +3,8 @@
   "private": true,
   "description": "Tests for the Shelly smart heating script",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "test:memory": "node --test tests/espruino/script-memory.js"
   },
   "engines": {
     "node": ">=22"

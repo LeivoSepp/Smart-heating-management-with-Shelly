@@ -48,37 +48,36 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 
 ## What the simulated device enforces
 
+"Gen4" below is a Shelly 1PM Mini Gen4 on firmware 2.2.1, measured in November 2026. "Plus 1PM" is a Shelly Plus 1PM on firmware 1.7.6.
+
 | Limit or behaviour | Value | Source |
 |---|---|---|
-| RPC calls in flight per script | 5, counted only within one synchronous run, see below | Shelly docs, Script Language Reference, Resource Limits |
-| Active timers per script | 5 | Shelly docs, Script Language Reference, Resource Limits |
-| Schedules per device | 20 | Shelly docs, Schedule |
-| Calls in one schedule | 5 | Shelly docs, Schedule |
-| Virtual components per device, the group included | 10 | Shelly docs, Virtual: "a limit of 10 instances per device". That the group counts is taken from the discussion of pull request #11, not measured. |
-| Virtual component ID | 200 to 299, each ID once per component type | Shelly docs, Virtual |
-| KVS value | 253, every `"` counted twice | Shelly docs, KVS, give 253 without a unit. The double count was measured on a Shelly Plus 1PM: "length should be less than 255". Counting other characters in UTF-8 bytes is assumed. |
-| KVS key | 42 characters | Shelly docs, KVS, give 42 without a unit |
-| KVS keys per device | 50 | Shelly docs, KVS |
-| `KVS.Get` of a missing key | `-105` | Measured on a Shelly Plus 1PM, firmware 1.7.6 |
-| `Schedule.Delete` of a missing ID | `-103` | Device log in the discussion of pull request #11 |
-| `Schedule.Update` of a missing ID | `-105` | Device log in the discussion of pull request #11 |
-| ID of a new schedule | the lowest free one | Device log in the discussion of pull request #11: the ID of a deleted schedule was given to the next one |
-| `Script.Start`, `Script.Stop` | answer `{ was_running }` | Shelly docs, Script |
-| Autostart of a script made by `Script.Create` | off | Assumed. The Shelly docs give no default. |
-| ID of a script made by `Script.Create` | the highest existing ID plus one | Assumed |
+| RPC calls in flight per script | 5, counted only within one synchronous run, see below | Shelly docs, Script Language Reference, Resource Limits. Gen4: the sixth call stops the script with "Too many calls in progress". |
+| Active timers per script | 5 | Shelly docs, same page. Gen4: the sixth timer stops the script with "Too many running timers." |
+| Schedules per device | 20, then `-108` | Shelly docs, Schedule, and Gen4. The job that updates the firmware automatically is one of the 20. |
+| Calls in one schedule | 5, then `-103` | Shelly docs, Schedule, and Gen4 |
+| Virtual components per device, the group included | 10, then `-108` | Shelly docs, Virtual, and Gen4: a group and nine components were accepted, the next one was refused |
+| Virtual component ID | 200 to 299, else `-103`. Each ID once per component type, else `-106`. | Shelly docs, Virtual, and Gen4 |
+| `Virtual.Delete` of a missing component | `-105` | Gen4 |
+| KVS value | 253 bytes of UTF-8, every `"` counted twice, else `-103` | Shelly docs, KVS, give 253. Plus 1PM and Gen4: "length should be less than 255". Gen4: 233 characters with 20 quotes fit, 126 times "õ" fit, one more of either did not. |
+| KVS key | 42 characters, else `-103` | Shelly docs, KVS, and Gen4 |
+| KVS keys per device | 50, then `-108` | Shelly docs, KVS, and Gen4 |
+| `KVS.Get` of a missing key | `-105` | Plus 1PM and Gen4 |
+| `Schedule.Delete` of a missing ID | `-103` | Device log in the discussion of pull request #11, and Gen4 |
+| `Schedule.Update` of a missing ID | `-105` | Device log in the discussion of pull request #11, and Gen4 |
+| ID of a new schedule | the highest existing ID plus one | Gen4: with schedules 2 and 3, deleting 3 gave 3 again, deleting 2 gave 4 |
+| ID of a new script | the lowest free one | Gen4 |
+| Autostart of a script made by `Script.Create` | off | Gen4 |
+| `Script.Start`, `Script.Stop` | answer `{ was_running }` | Shelly docs, Script, and Gen4 |
 | `HTTP.GET` answer | Elering in `body_b64`, Open-Meteo in `body` | Shelly docs, HTTP: `body` for text and JSON, `body_b64` for binary data. Elering answers with `application/octet-stream`. |
 
-The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode) and a Shelly 1PM Gen3 (Virtual Component mode). All three report firmware 1.7.6.
+The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode) and a Shelly 1PM Gen3 (Virtual Component mode). All three report firmware 1.7.6. The measurements above come from the two real devices named there, not from these three models.
 
-### Assumed error codes
+### Assumed error code
 
-No source gives an error code for these cases. The simulation answers all of them with `ERR_ASSUMED`. The script only tests for a non-zero code, so the number does not change a test result, but it is an assumption until someone reads it from a device.
+No source gives the error code of an `HTTP.GET` that fails. The simulation answers it with `ERR_ASSUMED`. The script only tests for a non-zero code, so the number does not change a test result.
 
-- A full limit: schedules, calls in a schedule, virtual components, KVS value, KVS key, number of KVS keys.
-- A virtual component ID that is taken or out of range, and `Virtual.Delete` of a missing component.
-- An `HTTP.GET` that fails.
-
-More than 5 RPC calls in flight, more than 5 active timers, a run that never comes to rest and an exception in a timer or RPC callback end a test with `sim.crashed` set. What the device itself does at the first two is not documented. An exception while the script loads fails the test directly, and so does an RPC method the simulation does not know.
+More than 5 RPC calls in flight, more than 5 active timers, a run that never comes to rest and an exception in a timer or RPC callback end a test with `sim.crashed` set. An exception while the script loads fails the test directly, and so does an RPC method the simulation does not know.
 
 ## What is not simulated
 
@@ -92,6 +91,6 @@ A passing test does not prove these. They need a real device.
 - Random delays. `Math.random()` always returns 0, so the delay of the Elering request and the start jitter never happen.
 - `Script.Start` running the code of the started script. The watchdog is run by the tests on a second simulated device.
 - The size of an HTTP answer.
-- Paging of `Shelly.GetComponents`. The simulation returns every component in one answer.
-- `Script.PutCode` accepting only ASCII.
+- Paging of `Shelly.GetComponents`. The simulation returns every component in one answer. So did the Gen4 with ten components. A Shelly 1 Mini Gen3 on firmware 2.0.3 returned six of ten when the configuration was asked for as well.
+- `Script.PutCode` refusing characters outside ASCII, as seen on a Plus 1PM. The Gen4 accepted them.
 - Other firmware versions and device generations than the ones named above.

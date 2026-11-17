@@ -113,23 +113,23 @@ function kvsGet(sim, params) {
 
 function kvsSet(sim, params) {
     const isNewKey = !(params.key in sim.kvs);
-    if (params.key.length > limits.KVS_KEY_LIMIT) return failed(limits.ERR_ASSUMED, 'Key too long');
-    if (limits.kvsLength(String(params.value)) > limits.KVS_VALUE_LIMIT) return failed(limits.ERR_ASSUMED, 'Value too long');
-    if (isNewKey && Object.keys(sim.kvs).length >= limits.KVS_KEY_COUNT_LIMIT) return failed(limits.ERR_ASSUMED, 'Too many keys');
+    if (params.key.length > limits.KVS_KEY_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'key\': too long');
+    if (limits.kvsLength(String(params.value)) > limits.KVS_VALUE_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'value\': too long');
+    if (isNewKey && Object.keys(sim.kvs).length >= limits.KVS_KEY_COUNT_LIMIT) return failed(limits.ERR_RESOURCE_EXHAUSTED, `Reached the maximum ${limits.KVS_KEY_COUNT_LIMIT} of keys`);
     sim.kvs[params.key] = params.value;
     return ok({ etag: 'e', rev: 1 });
 }
 
-function lowestFreeScheduleId(sim) {
+function lowestFreeId(takenIds) {
     let id = 1;
-    while (sim.schedules.has(id)) id++;
+    while (takenIds.indexOf(id) >= 0) id++;
     return id;
 }
 
 function scheduleCreate(sim, params) {
-    if (sim.schedules.size >= limits.SCHEDULE_LIMIT) return failed(limits.ERR_ASSUMED, 'Too many schedules');
-    if (params.calls.length > limits.SCHEDULE_CALL_LIMIT) return failed(limits.ERR_ASSUMED, 'Too many calls');
-    const id = lowestFreeScheduleId(sim);
+    if (sim.schedules.size >= limits.SCHEDULE_LIMIT) return failed(limits.ERR_RESOURCE_EXHAUSTED, `Reached the maximum ${limits.SCHEDULE_LIMIT} of jobs`);
+    if (params.calls.length > limits.SCHEDULE_CALL_LIMIT) return failed(limits.ERR_INVALID_ARGUMENT, 'Invalid argument \'calls\': Failed validation!');
+    const id = Math.max(0, ...sim.schedules.keys()) + 1;
     sim.schedules.set(id, clone(params));
     return ok({ id, rev: 1 });
 }
@@ -149,16 +149,16 @@ function scheduleUpdate(sim, params) {
 function virtualAdd(sim, params) {
     const key = params.type + ':' + params.id;
     const isIdInRange = params.id >= limits.VIRTUAL_ID_FIRST && params.id <= limits.VIRTUAL_ID_LAST;
-    if (!isIdInRange) return failed(limits.ERR_ASSUMED, 'Id out of range');
-    if (sim.components.some((component) => component.key === key)) return failed(limits.ERR_ASSUMED, 'Id not available');
-    if (sim.components.length >= limits.VIRTUAL_COMPONENT_LIMIT) return failed(limits.ERR_ASSUMED, 'Too many virtual components');
+    if (!isIdInRange) return failed(limits.ERR_INVALID_ARGUMENT, `Invalid argument 'id': should be >= ${limits.VIRTUAL_ID_FIRST} and <= ${limits.VIRTUAL_ID_LAST}!`);
+    if (sim.components.length >= limits.VIRTUAL_COMPONENT_LIMIT) return failed(limits.ERR_RESOURCE_EXHAUSTED, `Reached the maximum ${limits.VIRTUAL_COMPONENT_LIMIT} of virtual components`);
+    if (sim.components.some((component) => component.key === key)) return failed(limits.ERR_ALREADY_EXISTS, 'Resource \'' + key + '\' already exists!');
     sim.components.push({ key, status: { value: params.config.default_value }, config: clone(params.config) });
     return ok({ id: params.id });
 }
 
 function virtualDelete(sim, params) {
     const remaining = sim.components.filter((component) => component.key !== params.key);
-    if (remaining.length === sim.components.length) return failed(limits.ERR_ASSUMED, 'Component not found');
+    if (remaining.length === sim.components.length) return failed(limits.ERR_NOT_FOUND, 'Argument \'key\', value \'' + params.key + '\' not found!');
     sim.components = remaining;
     return ok(null);
 }
@@ -205,7 +205,7 @@ function scriptList(sim) {
 }
 
 function scriptCreate(sim, params) {
-    const id = Math.max(...sim.scripts.map((script) => script.id)) + 1;
+    const id = lowestFreeId(sim.scripts.map((script) => script.id));
     sim.scripts.push({ id, name: params.name, running: false, enable: false });
     return ok({ id });
 }

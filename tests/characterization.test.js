@@ -24,6 +24,7 @@ const VERSION_BEFORE_VIRTUAL_COMPONENTS = 4.1;
 const PRO_FIRMWARE_IN_KVS_MODE = ['1.4.2', '1.4.3'];
 const FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE = '1.4.4';
 const FORECAST_OF_8_HOURS = new Array(HOURS_PER_DAY).fill(-4);
+const HEATING_HOURS_OF_THAT_FORECAST = 8;
 const FORECAST_OF_7_AND_A_HALF_HOURS = new Array(HOURS_PER_DAY).fill(-3);
 const SWITCH_ON = [{ method: 'Switch.Set', params: { id: 0, on: true } }];
 const SWITCH_OFF = [{ method: 'Switch.Set', params: { id: 0, on: false } }];
@@ -32,6 +33,13 @@ const MIDDAY_OF_NORMAL_DAY = '2026-10-07T12:00:00+03:00';
 const LAST_HOUR_BEFORE_TOMORROWS_PRICES = '2026-10-07T22:50:00+03:00';
 const PRICES_OF_NORMAL_DAY = 'https://dashboard.elering.ee/api/nps/price/csv?fields=ee&start=2026-10-06T21:00Z&end=2026-10-07T21:00Z';
 const RUNNING_WATCHDOG = { id: WATCHDOG_SCRIPT_ID, name: 'watchdog', running: true, enable: true };
+const UNUSABLE_FORECASTS = [
+    ['is not JSON', { forecastBody: '<html></html>' }],
+    ['has no hourly values', { forecastBody: '{}' }],
+    ['has no temperatures', { forecastBody: '{"hourly":{}}' }],
+    ['has fewer temperatures than the period has hours', { temperatures: FORECAST_OF_8_HOURS.slice(1) }],
+    ['has more temperatures than the period has hours', { forecastBody: forecastBodyOf(FORECAST_OF_8_HOURS.concat(FORECAST_OF_8_HOURS[0])) }],
+];
 const HEATING_SCRIPT_WITHOUT_AUTOSTART = Object.assign({}, HEATING_SCRIPT_ENTRY, { enable: false });
 const OTHER_SCRIPTS = idleScripts(limits.SCRIPT_LIMIT - 1, HEATING_SCRIPT_ID + 1);
 const FAILED_WATCHDOG_INSTALLS = [
@@ -40,6 +48,10 @@ const FAILED_WATCHDOG_INSTALLS = [
     ['the running watchdog cannot be stopped', { scripts: [HEATING_SCRIPT_ENTRY, RUNNING_WATCHDOG], rpcFail: /^Script\.Stop$/ }],
     ['the code of the watchdog cannot be stored', { rpcFail: /^Script\.PutCode$/ }],
 ];
+
+function forecastBodyOf(temperatures) {
+    return JSON.stringify({ hourly: { apparent_temperature: temperatures } });
+}
 
 function kvsWith(conf) {
     return { SmartHeatingConf1: JSON.stringify(Object.assign({}, DEFAULT_CONF, conf)) };
@@ -128,7 +140,7 @@ describe('heating time', () => {
 
     it('derives the heating hours from the weather forecast', () => {
         const sim = run({ kvs: kvsWith({ IsForecastUsed: true }), temperatures: FORECAST_OF_8_HOURS });
-        assert.equal(sim.heatingMinutes(), 8 * MINUTES_PER_HOUR);
+        assert.equal(sim.heatingMinutes(), HEATING_HOURS_OF_THAT_FORECAST * MINUTES_PER_HOUR);
         assert.ok(sim.httpRequests[0].indexOf('forecast_hours=24') > 0);
     });
 
@@ -263,6 +275,14 @@ describe('fallback without prices or forecast', () => {
         assert.ok(sim.httpRequests[0].indexOf('open-meteo') >= 0);
         assert.deepEqual(sim.timespecs(), hourlyTimespec(HISTORICALLY_CHEAP_HOURS));
     });
+
+    for (const [problem, answer] of UNUSABLE_FORECASTS) {
+        it(`uses the historically cheap hours when the forecast answer ${problem}`, () => {
+            const sim = run(Object.assign({ kvs: kvsWith({ IsForecastUsed: true }) }, answer));
+            assert.ok(hasFallenBack(sim));
+            assert.deepEqual(sim.timespecs(), hourlyTimespec(HISTORICALLY_CHEAP_HOURS));
+        });
+    }
 });
 
 describe('schedule bookkeeping', () => {
@@ -342,6 +362,7 @@ describe('Virtual Component mode', () => {
         'number:202': 300, 'boolean:201': false, 'enum:202': 'ee', 'number:203': 0,
     };
     const PERIOD_OF_12_HOURS = Object.assign({}, DEFAULT_VALUES, { 'enum:200': '12', 'number:200': 3 });
+    const FORECAST_IN_USE = Object.assign({}, DEFAULT_VALUES, { 'boolean:200': true });
     const FOREIGN_COMPONENTS = virtualComponents({ 'boolean:210': true, 'number:250': 21 });
 
     function valuesOf(sim) {
@@ -414,6 +435,14 @@ describe('Virtual Component mode', () => {
         const sim = run({ deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0) }, components: virtualComponents(PERIOD_OF_12_HOURS) });
         assert.deepEqual(sim.timespecs(), expectedTimespec(NORMAL_DAY, { TimePeriod: 12, HeatingTime: 3 }));
         assert.equal(callIndex(sim, 'Virtual.Delete'), -1);
+    });
+
+    it('derives the heating hours from the forecast when the period comes from a component', () => {
+        const sim = run({
+            deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0) },
+            components: virtualComponents(FORECAST_IN_USE), temperatures: FORECAST_OF_8_HOURS,
+        });
+        assert.equal(sim.heatingMinutes(), HEATING_HOURS_OF_THAT_FORECAST * MINUTES_PER_HOUR);
     });
 });
 

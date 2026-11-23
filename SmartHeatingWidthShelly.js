@@ -521,8 +521,17 @@ function gFcs() {
             return;
         }
         //open-meteo json response to get 6h, 12h or 24h temperatures
-        const temp = JSON.parse(res.body)["hourly"]["apparent_temperature"];
+        let temp;
+        try {
+            temp = JSON.parse(res.body)["hourly"]["apparent_temperature"];
+        } catch (e) {
+            print(_.pId, "Forecast answer is not readable:", e);
+        }
         res = null;
+        if (!temp || temp.length != c.tPer) {
+            hErr("Forecast has no temperatures for the period, check again in " + _.freq / 60 + " min.");
+            return;
+        }
         let sumT = 0;
         for (let i = 0; i < temp.length; i++) {
             sumT += temp[i];

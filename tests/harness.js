@@ -186,6 +186,7 @@ function eleringAnswer(sim, url) {
 }
 
 function forecastAnswer(sim, url) {
+    if (sim.forecastBody !== null) return { code: 200, body: sim.forecastBody };
     const hours = Number(new URL(url).searchParams.get('forecast_hours'));
     const temperatures = sim.temperatures.slice(0, hours);
     return { code: 200, body: JSON.stringify({ hourly: { apparent_temperature: temperatures } }) };
@@ -352,6 +353,7 @@ function initialState(deviceOptions) {
         deviceInfo: deviceOptions.deviceInfo,
         prices: eleringRows(deviceOptions.elering),
         temperatures: deviceOptions.temperatures || forecastTemperatures(),
+        forecastBody: deviceOptions.forecastBody,
         httpFail: deviceOptions.httpFail,
         rpcFail: deviceOptions.rpcFail,
         scriptCode: {},
@@ -379,6 +381,7 @@ function createShelly(options) {
         components: [],
         elering: NORMAL_DAY.fixture,
         temperatures: null,
+        forecastBody: null,
         httpFail: null,
         rpcFail: null,
         code: null,

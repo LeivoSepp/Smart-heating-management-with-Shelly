@@ -44,6 +44,7 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `components` | Virtual components at start, `[{ key, status: { value }, config }]` |
 | `elering` | Price fixture |
 | `temperatures` | Forecast temperatures instead of the fixture |
+| `forecastBody` | Body of the forecast answer, as text, instead of the temperatures |
 | `httpFail` | RegExp of URLs whose `HTTP.GET` fails |
 | `rpcFail` | RegExp of RPC method names that fail, matched against the name as the script writes it (`KVS.set`, `KVS.Get`) |
 | `deviceInfo` | Result of `Shelly.getDeviceInfo()` |

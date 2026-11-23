@@ -490,7 +490,7 @@ function main() {
     }
     // set the network provider
     if (c.pack.substring(0, 4) == "VORK") {
-        _.prov = "Elektlevi";
+        _.prov = "Elektrilevi";
     } else if (c.pack.substring(0, 4) == "PART") {
         _.prov = "Imatra";
     } else if (c.pack.substring(0, 4) == "PAMA" || c.pack.substring(0, 7) == "SPECIAL") {
@@ -691,7 +691,7 @@ function fFee(epoch) {
     const hour = new Date(epoch * 1000).getHours();
     const day = new Date(epoch * 1000).getDay();
     const mnth = new Date(epoch * 1000).getMonth();
-    if (_.prov === "Elektlevi") {
+    if (_.prov === "Elektrilevi") {
         if ((mnth >= 10 || mnth <= 2) && (day === 0 || day === 6) && hour >= 16 && hour < 20) {
             // peak holiday: Nov-Mar, SA-SU at 16:00–20:00
             return c.pack.hMRt;

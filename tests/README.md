@@ -32,7 +32,7 @@ The tests pin what the script does today, also where that differs from the price
 - Without a period, the first quarter of the next day counts as hour 0.
 - A Gen2 Pro on firmware 1.4.3 stays in KVS mode, although the comment in the script names 1.4.3 as the first firmware with Virtual Components. The script uses them from 1.4.4 on.
 
-The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the script, because the fee has no other way out of it.
+The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the script, because the fee has no other way out of it. One of them lets a planning run set both, so the provider name that `main()` stores and the one `fFee` looks for stay the same.
 
 ## Options of `createShelly`
 
@@ -177,7 +177,7 @@ The memory Espruino gets for the test is 5000 blocks, far more than a device has
 
 In Espruino the script must make the same RPC calls and reads in the same order as in Node. The second run in Espruino also compares the parameters of every call and the arguments of every read with the Node run and reports a difference. One value is left out of that: `LastCalculation` in `SmartHeatingSys`, a date text the two engines write differently. Espruino also writes a number with at most 11 decimal places, 1/3 as `0.33333333333`, and text outside ASCII byte by byte. A number that needs more places or such a text in the parameters of a call is therefore reported as a difference. Version 4.9 sends neither in KVS mode.
 
-`script-memory.js` holds the peak and the retained memory of version 4.9 for every case, between 15 512 and 15 960 bytes of peak and 3 752 to 3 780 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
+`script-memory.js` holds the peak and the retained memory of version 4.9 for every case, between 15 526 and 15 974 bytes of peak and 3 766 to 3 794 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
 
 ### How the numbers relate to a device
 

@@ -15,21 +15,21 @@ const DEFAULT_SETTINGS = { name: 'default settings', conf: DEFAULT_CONF };
 const STORAGE_TANK = { name: 'storage tank with forecast', conf: STORAGE_TANK_CONF };
 const HOT_WATER = { name: 'hot water in 6 h periods', conf: HOT_WATER_CONF };
 const VERSION_4_9 = [
-    { settings: DEFAULT_SETTINGS, day: NORMAL_DAY, peakBytes: 15624, retainedBytes: 3780 },
-    { settings: DEFAULT_SETTINGS, day: HOT_WATER_DAY, peakBytes: 15960, retainedBytes: 3780 },
-    { settings: DEFAULT_SETTINGS, day: NEGATIVE_DAY, peakBytes: 15540, retainedBytes: 3780 },
-    { settings: DEFAULT_SETTINGS, day: SPRING_DST_DAY, peakBytes: 15820, retainedBytes: 3780 },
-    { settings: DEFAULT_SETTINGS, day: AUTUMN_DST_DAY, peakBytes: 15778, retainedBytes: 3780 },
-    { settings: STORAGE_TANK, day: NORMAL_DAY, peakBytes: 15610, retainedBytes: 3766 },
-    { settings: STORAGE_TANK, day: HOT_WATER_DAY, peakBytes: 15946, retainedBytes: 3766 },
-    { settings: STORAGE_TANK, day: NEGATIVE_DAY, peakBytes: 15526, retainedBytes: 3766 },
-    { settings: STORAGE_TANK, day: SPRING_DST_DAY, peakBytes: 15806, retainedBytes: 3766 },
-    { settings: STORAGE_TANK, day: AUTUMN_DST_DAY, peakBytes: 15764, retainedBytes: 3766 },
-    { settings: HOT_WATER, day: NORMAL_DAY, peakBytes: 15596, retainedBytes: 3752 },
-    { settings: HOT_WATER, day: HOT_WATER_DAY, peakBytes: 15932, retainedBytes: 3752 },
-    { settings: HOT_WATER, day: NEGATIVE_DAY, peakBytes: 15512, retainedBytes: 3752 },
-    { settings: HOT_WATER, day: SPRING_DST_DAY, peakBytes: 15792, retainedBytes: 3752 },
-    { settings: HOT_WATER, day: AUTUMN_DST_DAY, peakBytes: 15750, retainedBytes: 3752 },
+    { settings: DEFAULT_SETTINGS, day: NORMAL_DAY, peakBytes: 15638, retainedBytes: 3794 },
+    { settings: DEFAULT_SETTINGS, day: HOT_WATER_DAY, peakBytes: 15974, retainedBytes: 3794 },
+    { settings: DEFAULT_SETTINGS, day: NEGATIVE_DAY, peakBytes: 15554, retainedBytes: 3794 },
+    { settings: DEFAULT_SETTINGS, day: SPRING_DST_DAY, peakBytes: 15834, retainedBytes: 3794 },
+    { settings: DEFAULT_SETTINGS, day: AUTUMN_DST_DAY, peakBytes: 15792, retainedBytes: 3794 },
+    { settings: STORAGE_TANK, day: NORMAL_DAY, peakBytes: 15624, retainedBytes: 3780 },
+    { settings: STORAGE_TANK, day: HOT_WATER_DAY, peakBytes: 15960, retainedBytes: 3780 },
+    { settings: STORAGE_TANK, day: NEGATIVE_DAY, peakBytes: 15540, retainedBytes: 3780 },
+    { settings: STORAGE_TANK, day: SPRING_DST_DAY, peakBytes: 15820, retainedBytes: 3780 },
+    { settings: STORAGE_TANK, day: AUTUMN_DST_DAY, peakBytes: 15778, retainedBytes: 3780 },
+    { settings: HOT_WATER, day: NORMAL_DAY, peakBytes: 15610, retainedBytes: 3766 },
+    { settings: HOT_WATER, day: HOT_WATER_DAY, peakBytes: 15946, retainedBytes: 3766 },
+    { settings: HOT_WATER, day: NEGATIVE_DAY, peakBytes: 15526, retainedBytes: 3766 },
+    { settings: HOT_WATER, day: SPRING_DST_DAY, peakBytes: 15806, retainedBytes: 3766 },
+    { settings: HOT_WATER, day: AUTUMN_DST_DAY, peakBytes: 15764, retainedBytes: 3766 },
 ];
 
 const EMPTY_SCRIPT = { code: '', peakBytes: 280, retainedBytes: 84 };

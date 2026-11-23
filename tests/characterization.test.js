@@ -474,10 +474,16 @@ describe('network fee', () => {
     ];
     for (const [name, pricedTime, packageName, fee] of ELEKTRILEVI_CASES) {
         it(`Elektrilevi ${name}`, () => {
-            assert.equal(feeAt('Elektlevi', packageName, pricedTime), fee);
+            assert.equal(feeAt('Elektrilevi', packageName, pricedTime), fee);
             assert.equal(oracle.elektrileviFee(epochSeconds(pricedTime), packageName), fee);
         });
     }
+
+    it('charges the fees of the package in EnergyProvider after a planning run', () => {
+        const [, pricedTime, packageName, fee] = ELEKTRILEVI_CASES[0];
+        const sim = run({ kvs: kvsWith({ EnergyProvider: packageName }) });
+        assert.equal(sim.eval(`fFee(${epochSeconds(pricedTime)})`), fee);
+    });
 
     const IMATRA_CASES = [
         ['summer weekday before 8 is night', '2026-06-10T07:30:00+03:00', 42],

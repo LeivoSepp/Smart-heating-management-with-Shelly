@@ -186,6 +186,7 @@ function eleringAnswer(sim, url) {
 }
 
 function forecastAnswer(sim, url) {
+    if (sim.forecastBody !== null) return { code: 200, body: sim.forecastBody };
     const hours = Number(new URL(url).searchParams.get('forecast_hours'));
     const temperatures = sim.temperatures.slice(0, hours);
     return { code: 200, body: JSON.stringify({ hourly: { apparent_temperature: temperatures } }) };
@@ -208,6 +209,7 @@ function scriptList(sim) {
 }
 
 function scriptCreate(sim, params) {
+    if (sim.scripts.length >= limits.SCRIPT_LIMIT) return failed(limits.ERR_RESOURCE_EXHAUSTED, `Reached the maximum ${limits.SCRIPT_LIMIT} of stored scripts`);
     const id = lowestFreeId(sim.scripts.map((script) => script.id));
     sim.scripts.push({ id, name: params.name, running: false, enable: false });
     return ok({ id });
@@ -257,6 +259,7 @@ const RPC_HANDLERS = {
 function answerOf(sim, method, params) {
     const handler = RPC_HANDLERS[method.toLowerCase()];
     if (!handler) throw new Error('Method ' + method + ' is not simulated');
+    if (sim.rpcFail && sim.rpcFail.test(method)) return failed(limits.ERR_RPC_FAILURE_ASSUMED, method + ' failed');
     return handler(sim, params || {});
 }
 
@@ -350,7 +353,9 @@ function initialState(deviceOptions) {
         deviceInfo: deviceOptions.deviceInfo,
         prices: eleringRows(deviceOptions.elering),
         temperatures: deviceOptions.temperatures || forecastTemperatures(),
+        forecastBody: deviceOptions.forecastBody,
         httpFail: deviceOptions.httpFail,
+        rpcFail: deviceOptions.rpcFail,
         scriptCode: {},
         switchConfig: {},
         group: null,
@@ -376,7 +381,9 @@ function createShelly(options) {
         components: [],
         elering: NORMAL_DAY.fixture,
         temperatures: null,
+        forecastBody: null,
         httpFail: null,
+        rpcFail: null,
         code: null,
         scripts: [HEATING_SCRIPT_ENTRY],
         scriptId: HEATING_SCRIPT_ID,

@@ -17,7 +17,7 @@ Node 22 or newer, no dependencies. `node --test` and running one file work as we
 | `harness.js` | The simulated device: `Shelly.call`, `Timer`, KVS, schedules, virtual components, scripts, a fake clock and HTTP answers from `fixtures/`. |
 | `limits.js` | Device limits and RPC error codes used by the simulation. |
 | `oracle.js` | Expected hours and Elektrilevi fees calculated from the price file and the Elektrilevi price list, without the code of the script. |
-| `settings.js` | Configurations, days and device types shared by the tests. |
+| `settings.js` | Configurations, days, device types and script entries shared by the tests. |
 | `fixtures/` | Elering price answers (15 minute prices, `fields=ee`) and an Open-Meteo forecast, downloaded from the real services. |
 | `espruino/` | The memory test, see [Memory](#memory). |
 
@@ -27,13 +27,12 @@ The Elering files are ISO-8859-1, as Elering serves them. The only character out
 
 The tests pin what the script does today, also where that differs from the price list, the calendar or its own comments. `oracle.js` follows the price list and the calendar day, so these cases are pinned with literal values, without it:
 
-- On a winter weekend morning the script charges the weekday peak rate.
 - Imatra summer or winter hours follow the clock of the device, not the hour being priced.
 - The plan of the 23 hour day 2026-03-29 contains hour 0 of the next day.
 - Without a period, the first quarter of the next day counts as hour 0.
 - A Gen2 Pro on firmware 1.4.3 stays in KVS mode, although the comment in the script names 1.4.3 as the first firmware with Virtual Components. The script uses them from 1.4.4 on.
 
-The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the script, because the fee has no other way out of it.
+The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the script, because the fee has no other way out of it. One of them lets a planning run set both, so the provider name that `main()` stores and the one `fFee` looks for stay the same.
 
 ## Options of `createShelly`
 
@@ -45,7 +44,9 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `components` | Virtual components at start, `[{ key, status: { value }, config }]` |
 | `elering` | Price fixture |
 | `temperatures` | Forecast temperatures instead of the fixture |
+| `forecastBody` | Body of the forecast answer, as text, instead of the temperatures |
 | `httpFail` | RegExp of URLs whose `HTTP.GET` fails |
+| `rpcFail` | RegExp of RPC method names that fail, matched against the name as the script writes it (`KVS.set`, `KVS.Get`) |
 | `deviceInfo` | Result of `Shelly.getDeviceInfo()` |
 | `scripts`, `scriptId` | Scripts on the device, `[{ id, name, running, enable }]`, and the ID of the running one |
 | `code` | Source text to run instead of the heating script |
@@ -70,6 +71,7 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `Schedule.Delete` of a missing ID | `-103` | Device log in the discussion of pull request #11, and Gen4 |
 | `Schedule.Update` of a missing ID | `-105` | Device log in the discussion of pull request #11, and Gen4 |
 | ID of a new schedule | the highest existing ID plus one | Gen4: with schedules 2 and 3, deleting 3 gave 3 again, deleting 2 gave 4 |
+| Scripts per device | 10, then `-108` | Gen4: the eleventh script was refused with "Reached the maximum 10 of stored scripts" |
 | ID of a new script | the lowest free one | Gen4 |
 | Autostart of a script made by `Script.Create` | off | Gen4 |
 | `Script.Start`, `Script.Stop` | answer `{ was_running }` | Shelly docs, Script, and Gen4 |
@@ -79,9 +81,11 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 
 The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode), a Shelly 1PM Gen3 and a Shelly 1PM Mini Gen4 (both Virtual Component mode). The Gen2 and Gen3 devices report firmware 1.7.6, the Gen4 reports 2.2.1. They differ only in what `Shelly.getDeviceInfo()` answers, which decides the mode. The limits and error codes are the same for all of them.
 
-### Assumed error code
+### Assumed error codes
 
 No source gives the error code of an `HTTP.GET` that fails. The simulation answers it with `ERR_HTTP_FAILURE_ASSUMED`. The script only tests for a non-zero code, so the number does not change a test result.
+
+The same holds for a method that `rpcFail` makes fail. The tests use it for `Script.List`, `Script.Stop` and `Script.PutCode`. No device was seen to refuse these while a watchdog was installed (the one refusal seen, `Script.PutCode` of code outside ASCII, is under [What is not simulated](#what-is-not-simulated)), so the simulation answers with `ERR_RPC_FAILURE_ASSUMED`, and the script only tests for a missing result or a non-zero code.
 
 More than 5 RPC calls in flight, more than 5 active timers, a run that never comes to rest and an exception in a timer or RPC callback end a test with `sim.crashed` set. An exception while the script loads fails the test directly, and so does an RPC method the simulation does not know.
 
@@ -114,7 +118,7 @@ The memory test runs one calculation of the script in Espruino, the interpreter 
 |---|---|
 | `build-espruino.sh` | Builds Espruino for Linux in Docker into `tests/espruino/bin/`, from a fixed Espruino commit and a fixed Debian image. The binary is 32-bit (`gcc -m32`), so a memory block is 14 bytes as on the devices. |
 | `espruino-shelly.patch` | Applied to Espruino before the build: a counter of the highest memory use, a clock the test can set, a memory size given at start and the loading of several files into one interpreter. This one file is under the Mozilla Public License 2.0, as Espruino is. The rest of the repository is under the MIT licence. |
-| `script-memory.js` | The test: three sets of settings on five days, with the numbers of version 4.9 for each, and a few tiny scripts that check the simulated device itself. |
+| `script-memory.js` | The test: three sets of settings on five days, with the numbers of the script for each, and a few tiny scripts that check the simulated device itself. |
 | `engine.js` | Runs a case first in Node, then twice in Espruino: once to measure, once to compare with the Node run. |
 | `shelly-device.js` | The simulated device inside Espruino. It answers each RPC call and each status or configuration read with the answer the same one got in Node. |
 | `one-cycle.js` | Runs one calculation and prints the result. |
@@ -171,9 +175,9 @@ So the simulated device adds nothing while the script loads, about 0.3 kB in a t
 
 The memory Espruino gets for the test is 5000 blocks, far more than a device has, so a case never fails for lack of memory. The case with the timer that fires 8571 times gets 1000 blocks: the counter of the peak walks through the whole memory at every allocation, and with 5000 blocks that case alone takes a minute.
 
-In Espruino the script must make the same RPC calls and reads in the same order as in Node. The second run in Espruino also compares the parameters of every call and the arguments of every read with the Node run and reports a difference. One value is left out of that: `LastCalculation` in `SmartHeatingSys`, a date text the two engines write differently. Espruino also writes a number with at most 11 decimal places, 1/3 as `0.33333333333`, and text outside ASCII byte by byte. A number that needs more places or such a text in the parameters of a call is therefore reported as a difference. Version 4.9 sends neither in KVS mode.
+In Espruino the script must make the same RPC calls and reads in the same order as in Node. The second run in Espruino also compares the parameters of every call and the arguments of every read with the Node run and reports a difference. One value is left out of that: `LastCalculation` in `SmartHeatingSys`, a date text the two engines write differently. Espruino also writes a number with at most 11 decimal places, 1/3 as `0.33333333333`, and text outside ASCII byte by byte. A number that needs more places or such a text in the parameters of a call is therefore reported as a difference. The script sends neither in KVS mode.
 
-`script-memory.js` holds the peak and the retained memory of version 4.9 for every case, between 15 512 and 15 960 bytes of peak and 3 752 to 3 780 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
+`script-memory.js` holds the peak and the retained memory of the script for every case, between 15 526 and 15 974 bytes of peak and 3 766 to 3 794 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
 
 ### How the numbers relate to a device
 

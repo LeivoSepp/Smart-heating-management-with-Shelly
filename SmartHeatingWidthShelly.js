@@ -112,7 +112,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.9,      //new script version
+    newV: "4.9.1",  //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };
@@ -490,7 +490,7 @@ function main() {
     }
     // set the network provider
     if (c.pack.substring(0, 4) == "VORK") {
-        _.prov = "Elektlevi";
+        _.prov = "Elektrilevi";
     } else if (c.pack.substring(0, 4) == "PART") {
         _.prov = "Imatra";
     } else if (c.pack.substring(0, 4) == "PAMA" || c.pack.substring(0, 7) == "SPECIAL") {
@@ -521,8 +521,17 @@ function gFcs() {
             return;
         }
         //open-meteo json response to get 6h, 12h or 24h temperatures
-        const temp = JSON.parse(res.body)["hourly"]["apparent_temperature"];
+        let temp;
+        try {
+            temp = JSON.parse(res.body)["hourly"]["apparent_temperature"];
+        } catch (e) {
+            print(_.pId, "Forecast answer is not readable:", e);
+        }
         res = null;
+        if (!temp || temp.length != c.tPer) {
+            hErr("Forecast has no temperatures for the period, check again in " + _.freq / 60 + " min.");
+            return;
+        }
         let sumT = 0;
         for (let i = 0; i < temp.length; i++) {
             sumT += temp[i];
@@ -682,11 +691,11 @@ function fFee(epoch) {
     const hour = new Date(epoch * 1000).getHours();
     const day = new Date(epoch * 1000).getDay();
     const mnth = new Date(epoch * 1000).getMonth();
-    if (_.prov === "Elektlevi") {
+    if (_.prov === "Elektrilevi") {
         if ((mnth >= 10 || mnth <= 2) && (day === 0 || day === 6) && hour >= 16 && hour < 20) {
             // peak holiday: Nov-Mar, SA-SU at 16:00–20:00
             return c.pack.hMRt;
-        } else if ((mnth >= 10 || mnth <= 2) && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
+        } else if ((mnth >= 10 || mnth <= 2) && day !== 0 && day !== 6 && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
             // peak daytime: Nov-Mar: MO-FR at 09:00–12:00 and at 16:00–20:00
             return c.pack.dMRt;
         } else if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
@@ -907,7 +916,7 @@ function loop() {
         return;
     }
     _.isLp = true;
-    if (updt(_.tsPr) || c.isFc && updt(_.tsFc)) {   //check if the prices or forecast needs to be updated
+    if (updt(_.tsPr) || c.isFc && c.tPer > 0 && updt(_.tsFc)) {   //check if the prices or forecast needs to be updated
         strt();                                     //start the program
     } else {
         _.isLp = false;
@@ -958,6 +967,8 @@ function f_Wd() {
             } else {
                 Shelly.call('Script.Stop', { id: id }, putC, { id: id });               //stop the existing watchdog 
             }
+        } else {
+            _.isLp = false;
         }
     });
 }
@@ -966,6 +977,7 @@ function f_Wd() {
 function putC(res, err, msg, data) {
     if (err !== 0) {
         print(_.pId, "Watchdog script not created:", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
+        _.isLp = false;
     } else {
         let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SmartHeatingSys"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SmartHeatingSys"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.id,strt())}));'
         const id = res.id > 0 ? res.id : data.id;   //get the script ID
@@ -974,6 +986,7 @@ function putC(res, err, msg, data) {
                 a_St(data.id);
             } else {
                 print(_.pId, "Code is not added to the script:", msg, ". Schedule will notbe deleted if heating script is stopped or deleted.")
+                _.isLp = false;
             }
         }, { id: id });
     }

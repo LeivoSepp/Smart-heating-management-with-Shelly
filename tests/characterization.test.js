@@ -6,22 +6,26 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createShelly, runWatchdog, ROOT } = require('./harness');
 const oracle = require('./oracle');
+const limits = require('./limits');
 const {
     SCRIPT_VERSION, CYCLE_SECONDS, DEFAULT_CONF, STORAGE_TANK_CONF, HOT_WATER_CONF,
     NORMAL_DAY, HOT_WATER_DAY, NEGATIVE_DAY, SPRING_DST_DAY, AUTUMN_DST_DAY,
     HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY, GEN2_PRO_DEVICE, GEN3_DEVICE, GEN4_DEVICE,
-    MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS,
+    MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS, idleScripts,
 } = require('./settings');
 
-const RELAY_DELAY_SECONDS = MINUTES_PER_HOUR * SECONDS_PER_MINUTE + RELAY_OVERLAP_SECONDS;
+const SECONDS_PER_HOUR = MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
+const RELAY_DELAY_SECONDS = SECONDS_PER_HOUR + RELAY_OVERLAP_SECONDS;
 const FALLBACK_LOG = 'Internet error';
 const GROUP_MEMBER_COUNT = 9;
 const OWN_COMPONENT_COUNT = GROUP_MEMBER_COUNT + 1;
 const GROUP_KEY = 'group:200';
 const VERSION_BEFORE_VIRTUAL_COMPONENTS = 4.1;
+const VERSION_STORED_AS_A_NUMBER = 4.9;
 const PRO_FIRMWARE_IN_KVS_MODE = ['1.4.2', '1.4.3'];
 const FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE = '1.4.4';
 const FORECAST_OF_8_HOURS = new Array(HOURS_PER_DAY).fill(-4);
+const HEATING_HOURS_OF_THAT_FORECAST = 8;
 const FORECAST_OF_7_AND_A_HALF_HOURS = new Array(HOURS_PER_DAY).fill(-3);
 const SWITCH_ON = [{ method: 'Switch.Set', params: { id: 0, on: true } }];
 const SWITCH_OFF = [{ method: 'Switch.Set', params: { id: 0, on: false } }];
@@ -30,7 +34,25 @@ const MIDDAY_OF_NORMAL_DAY = '2026-10-07T12:00:00+03:00';
 const LAST_HOUR_BEFORE_TOMORROWS_PRICES = '2026-10-07T22:50:00+03:00';
 const PRICES_OF_NORMAL_DAY = 'https://dashboard.elering.ee/api/nps/price/csv?fields=ee&start=2026-10-06T21:00Z&end=2026-10-07T21:00Z';
 const RUNNING_WATCHDOG = { id: WATCHDOG_SCRIPT_ID, name: 'watchdog', running: true, enable: true };
+const UNUSABLE_FORECASTS = [
+    ['is not JSON', { forecastBody: '<html></html>' }],
+    ['has no hourly values', { forecastBody: '{}' }],
+    ['has no temperatures', { forecastBody: '{"hourly":{}}' }],
+    ['has fewer temperatures than the period has hours', { temperatures: FORECAST_OF_8_HOURS.slice(1) }],
+    ['has more temperatures than the period has hours', { forecastBody: forecastBodyOf(FORECAST_OF_8_HOURS.concat(FORECAST_OF_8_HOURS[0])) }],
+];
 const HEATING_SCRIPT_WITHOUT_AUTOSTART = Object.assign({}, HEATING_SCRIPT_ENTRY, { enable: false });
+const OTHER_SCRIPTS = idleScripts(limits.SCRIPT_LIMIT - 1, HEATING_SCRIPT_ID + 1);
+const FAILED_WATCHDOG_INSTALLS = [
+    ['the device has no room for one more script', { scripts: [HEATING_SCRIPT_ENTRY].concat(OTHER_SCRIPTS) }],
+    ['the scripts of the device cannot be listed', { rpcFail: /^Script\.List$/ }],
+    ['the running watchdog cannot be stopped', { scripts: [HEATING_SCRIPT_ENTRY, RUNNING_WATCHDOG], rpcFail: /^Script\.Stop$/ }],
+    ['the code of the watchdog cannot be stored', { rpcFail: /^Script\.PutCode$/ }],
+];
+
+function forecastBodyOf(temperatures) {
+    return JSON.stringify({ hourly: { apparent_temperature: temperatures } });
+}
 
 function kvsWith(conf) {
     return { SmartHeatingConf1: JSON.stringify(Object.assign({}, DEFAULT_CONF, conf)) };
@@ -71,6 +93,10 @@ function hasLogged(sim, text) {
 
 function callIndex(sim, method) {
     return sim.calls.findIndex((call) => call.method === method);
+}
+
+function callCount(sim, method) {
+    return sim.calls.filter((call) => call.method === method).length;
 }
 
 function hasCalled(sim, method, id) {
@@ -115,7 +141,7 @@ describe('heating time', () => {
 
     it('derives the heating hours from the weather forecast', () => {
         const sim = run({ kvs: kvsWith({ IsForecastUsed: true }), temperatures: FORECAST_OF_8_HOURS });
-        assert.equal(sim.heatingMinutes(), 8 * MINUTES_PER_HOUR);
+        assert.equal(sim.heatingMinutes(), HEATING_HOURS_OF_THAT_FORECAST * MINUTES_PER_HOUR);
         assert.ok(sim.httpRequests[0].indexOf('forecast_hours=24') > 0);
     });
 
@@ -184,6 +210,12 @@ describe('hourly planning', () => {
         assert.deepEqual(sim.timespecs(), hourlyTimespec([0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]));
     });
 
+    it('plans once, not every five minutes, without a period when the forecast is switched on', () => {
+        const sim = run({ kvs: kvsWith({ TimePeriod: 0, IsForecastUsed: true }) }).runFor(SECONDS_PER_HOUR);
+        assert.equal(sim.httpRequests.length, 1);
+        assert.equal(callCount(sim, 'Schedule.Create'), 1);
+    });
+
     it('deletes the schedule and stores an empty schedule ID when every hour is above AlwaysOffPrice', () => {
         const sim = run({
             kvs: Object.assign(kvsWith({ AlwaysOnPrice: -20, AlwaysOffPrice: -10 }), { SmartHeatingSys1: systemData(7) }),
@@ -244,6 +276,14 @@ describe('fallback without prices or forecast', () => {
         assert.ok(sim.httpRequests[0].indexOf('open-meteo') >= 0);
         assert.deepEqual(sim.timespecs(), hourlyTimespec(HISTORICALLY_CHEAP_HOURS));
     });
+
+    for (const [problem, answer] of UNUSABLE_FORECASTS) {
+        it(`uses the historically cheap hours when the forecast answer ${problem}`, () => {
+            const sim = run(Object.assign({ kvs: kvsWith({ IsForecastUsed: true }) }, answer));
+            assert.ok(hasFallenBack(sim));
+            assert.deepEqual(sim.timespecs(), hourlyTimespec(HISTORICALLY_CHEAP_HOURS));
+        });
+    }
 });
 
 describe('schedule bookkeeping', () => {
@@ -298,6 +338,14 @@ describe('script autostart and watchdog', () => {
         assert.equal(sim.scriptCode[WATCHDOG_SCRIPT_ID], expected);
     });
 
+    for (const [reason, device] of FAILED_WATCHDOG_INSTALLS) {
+        it(`asks for prices again the next day when ${reason}`, () => {
+            const sim = run(Object.assign({ kvs: kvsWith({}) }, device)).runFor(HOURS_PER_DAY * SECONDS_PER_HOUR);
+            assert.equal(sim.crashed, null, sim.logs.join('\n'));
+            assert.ok(sim.httpRequests.length > 1);
+        });
+    }
+
     it('deletes the schedule when the heating script stops', () => {
         const sim = run({ kvs: kvsWith({}) });
         assert.equal(sim.schedules.size, 1);
@@ -315,6 +363,7 @@ describe('Virtual Component mode', () => {
         'number:202': 300, 'boolean:201': false, 'enum:202': 'ee', 'number:203': 0,
     };
     const PERIOD_OF_12_HOURS = Object.assign({}, DEFAULT_VALUES, { 'enum:200': '12', 'number:200': 3 });
+    const FORECAST_IN_USE = Object.assign({}, DEFAULT_VALUES, { 'boolean:200': true });
     const FOREIGN_COMPONENTS = virtualComponents({ 'boolean:210': true, 'number:250': 21 });
 
     function valuesOf(sim) {
@@ -383,10 +432,27 @@ describe('Virtual Component mode', () => {
         assert.equal(hasForeignComponent(sim), false);
     });
 
+    it('keeps the components of an installation whose version was stored as a number', () => {
+        const sim = run({
+            deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0, VERSION_STORED_AS_A_NUMBER) },
+            components: virtualComponents(PERIOD_OF_12_HOURS),
+        });
+        assert.equal(callIndex(sim, 'Virtual.Delete'), -1);
+        assert.equal(sim.storedJson('SmartHeatingSys1').Version, SCRIPT_VERSION);
+    });
+
     it('plans from the component values of an existing installation', () => {
         const sim = run({ deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0) }, components: virtualComponents(PERIOD_OF_12_HOURS) });
         assert.deepEqual(sim.timespecs(), expectedTimespec(NORMAL_DAY, { TimePeriod: 12, HeatingTime: 3 }));
         assert.equal(callIndex(sim, 'Virtual.Delete'), -1);
+    });
+
+    it('derives the heating hours from the forecast when the period comes from a component', () => {
+        const sim = run({
+            deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0) },
+            components: virtualComponents(FORECAST_IN_USE), temperatures: FORECAST_OF_8_HOURS,
+        });
+        assert.equal(sim.heatingMinutes(), HEATING_HOURS_OF_THAT_FORECAST * MINUTES_PER_HOUR);
     });
 });
 
@@ -406,6 +472,9 @@ describe('network fee', () => {
         ['winter weekday after the morning peak', '2026-01-14T12:00:00+02:00', 'VORK5', 52.9],
         ['winter weekday after the evening peak', '2026-01-14T20:00:00+02:00', 'VORK5', 52.9],
         ['winter weekend after the evening peak', '2026-01-17T20:00:00+02:00', 'VORK5', 30.3],
+        ['winter Saturday morning', '2026-01-17T10:00:00+02:00', 'VORK5', 30.3],
+        ['winter Sunday morning', '2026-01-18T10:00:00+02:00', 'VORK5', 30.3],
+        ['winter Saturday morning on VORK2', '2026-01-17T10:00:00+02:00', 'VORK2', 35.1],
         ['winter weekday night', '2026-01-14T23:00:00+02:00', 'VORK5', 30.3],
         ['summer weekday day', '2026-06-10T10:00:00+03:00', 'VORK2', 60.7],
         ['summer weekday early morning', '2026-06-10T06:45:00+03:00', 'VORK2', 35.1],
@@ -415,17 +484,16 @@ describe('network fee', () => {
     ];
     for (const [name, pricedTime, packageName, fee] of ELEKTRILEVI_CASES) {
         it(`Elektrilevi ${name}`, () => {
-            assert.equal(feeAt('Elektlevi', packageName, pricedTime), fee);
+            assert.equal(feeAt('Elektrilevi', packageName, pricedTime), fee);
             assert.equal(oracle.elektrileviFee(epochSeconds(pricedTime), packageName), fee);
         });
     }
 
-    const WINTER_SATURDAY_MORNING = '2026-01-17T10:00:00+02:00';
-    for (const [packageName, weekdayPeakRate] of [['VORK5', 81.8], ['VORK2', 60.7]]) {
-        it(`Elektrilevi ${packageName} charges a winter weekend morning at the weekday peak rate`, () => {
-            assert.equal(feeAt('Elektlevi', packageName, WINTER_SATURDAY_MORNING), weekdayPeakRate);
-        });
-    }
+    it('charges the fees of the package in EnergyProvider after a planning run', () => {
+        const [, pricedTime, packageName, fee] = ELEKTRILEVI_CASES[0];
+        const sim = run({ kvs: kvsWith({ EnergyProvider: packageName }) });
+        assert.equal(sim.eval(`fFee(${epochSeconds(pricedTime)})`), fee);
+    });
 
     const IMATRA_CASES = [
         ['summer weekday before 8 is night', '2026-06-10T07:30:00+03:00', 42],

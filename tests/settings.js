@@ -5,7 +5,7 @@ const DEVICE_DAYLIGHT_SAVING = {
     shiftMinutes: 60, standardOffsetMinutes: 120, lastWeekOfMonth: 4, sunday: 0,
     marchIndex: 2, startMinuteOfDay: 180, octoberIndex: 9, endMinuteOfDay: 240, dayOffset: 0,
 };
-const SCRIPT_VERSION = 4.9;
+const SCRIPT_VERSION = '4.9.1';
 const CYCLE_SECONDS = 120;
 
 const MILLISECONDS_PER_SECOND = 1000;

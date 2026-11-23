@@ -118,7 +118,7 @@ The memory test runs one calculation of the script in Espruino, the interpreter 
 |---|---|
 | `build-espruino.sh` | Builds Espruino for Linux in Docker into `tests/espruino/bin/`, from a fixed Espruino commit and a fixed Debian image. The binary is 32-bit (`gcc -m32`), so a memory block is 14 bytes as on the devices. |
 | `espruino-shelly.patch` | Applied to Espruino before the build: a counter of the highest memory use, a clock the test can set, a memory size given at start and the loading of several files into one interpreter. This one file is under the Mozilla Public License 2.0, as Espruino is. The rest of the repository is under the MIT licence. |
-| `script-memory.js` | The test: three sets of settings on five days, with the numbers of version 4.9 for each, and a few tiny scripts that check the simulated device itself. |
+| `script-memory.js` | The test: three sets of settings on five days, with the numbers of the script for each, and a few tiny scripts that check the simulated device itself. |
 | `engine.js` | Runs a case first in Node, then twice in Espruino: once to measure, once to compare with the Node run. |
 | `shelly-device.js` | The simulated device inside Espruino. It answers each RPC call and each status or configuration read with the answer the same one got in Node. |
 | `one-cycle.js` | Runs one calculation and prints the result. |
@@ -175,9 +175,9 @@ So the simulated device adds nothing while the script loads, about 0.3 kB in a t
 
 The memory Espruino gets for the test is 5000 blocks, far more than a device has, so a case never fails for lack of memory. The case with the timer that fires 8571 times gets 1000 blocks: the counter of the peak walks through the whole memory at every allocation, and with 5000 blocks that case alone takes a minute.
 
-In Espruino the script must make the same RPC calls and reads in the same order as in Node. The second run in Espruino also compares the parameters of every call and the arguments of every read with the Node run and reports a difference. One value is left out of that: `LastCalculation` in `SmartHeatingSys`, a date text the two engines write differently. Espruino also writes a number with at most 11 decimal places, 1/3 as `0.33333333333`, and text outside ASCII byte by byte. A number that needs more places or such a text in the parameters of a call is therefore reported as a difference. Version 4.9 sends neither in KVS mode.
+In Espruino the script must make the same RPC calls and reads in the same order as in Node. The second run in Espruino also compares the parameters of every call and the arguments of every read with the Node run and reports a difference. One value is left out of that: `LastCalculation` in `SmartHeatingSys`, a date text the two engines write differently. Espruino also writes a number with at most 11 decimal places, 1/3 as `0.33333333333`, and text outside ASCII byte by byte. A number that needs more places or such a text in the parameters of a call is therefore reported as a difference. The script sends neither in KVS mode.
 
-`script-memory.js` holds the peak and the retained memory of version 4.9 for every case, between 15 526 and 15 974 bytes of peak and 3 766 to 3 794 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
+`script-memory.js` holds the peak and the retained memory of the script for every case, between 15 526 and 15 974 bytes of peak and 3 766 to 3 794 bytes retained. A change that moves any of them fails the test until the table is updated, so a gain or a loss shows in the pull request.
 
 ### How the numbers relate to a device
 

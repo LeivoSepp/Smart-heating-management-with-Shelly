@@ -14,7 +14,7 @@ const DEVICE_BLOCK_BYTES = 14;
 const DEFAULT_SETTINGS = { name: 'default settings', conf: DEFAULT_CONF };
 const STORAGE_TANK = { name: 'storage tank with forecast', conf: STORAGE_TANK_CONF };
 const HOT_WATER = { name: 'hot water in 6 h periods', conf: HOT_WATER_CONF };
-const VERSION_4_9 = [
+const PINNED_CASES = [
     { settings: DEFAULT_SETTINGS, day: NORMAL_DAY, peakBytes: 15638, retainedBytes: 3794 },
     { settings: DEFAULT_SETTINGS, day: HOT_WATER_DAY, peakBytes: 15974, retainedBytes: 3794 },
     { settings: DEFAULT_SETTINGS, day: NEGATIVE_DAY, peakBytes: 15554, retainedBytes: 3794 },
@@ -147,8 +147,8 @@ before(() => {
     assert.ok(hasBinary(), `No Espruino at ${BINARY}, build it with tests/espruino/build-espruino.sh`);
 });
 
-describe('memory of version 4.9 in Espruino', { concurrency: true }, () => {
-    for (const { settings, day, peakBytes, retainedBytes } of VERSION_4_9) {
+describe('memory of the script in Espruino', { concurrency: true }, () => {
+    for (const { settings, day, peakBytes, retainedBytes } of PINNED_CASES) {
         it(`${settings.name}, prices of ${day.fixture}`, async (test) => {
             const measured = await measure({ now: day.now, elering: day.fixture, kvs: { SmartHeatingConf1: JSON.stringify(settings.conf) } });
             test.diagnostic(`peak ${measured.peakBytes} B, retained ${measured.retainedBytes} B`);

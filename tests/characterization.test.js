@@ -21,6 +21,7 @@ const GROUP_MEMBER_COUNT = 9;
 const OWN_COMPONENT_COUNT = GROUP_MEMBER_COUNT + 1;
 const GROUP_KEY = 'group:200';
 const VERSION_BEFORE_VIRTUAL_COMPONENTS = 4.1;
+const VERSION_STORED_AS_A_NUMBER = 4.9;
 const PRO_FIRMWARE_IN_KVS_MODE = ['1.4.2', '1.4.3'];
 const FIRST_PRO_FIRMWARE_IN_VIRTUAL_COMPONENT_MODE = '1.4.4';
 const FORECAST_OF_8_HOURS = new Array(HOURS_PER_DAY).fill(-4);
@@ -429,6 +430,15 @@ describe('Virtual Component mode', () => {
         });
         assert.equal(sim.components.length, OWN_COMPONENT_COUNT);
         assert.equal(hasForeignComponent(sim), false);
+    });
+
+    it('keeps the components of an installation whose version was stored as a number', () => {
+        const sim = run({
+            deviceInfo: GEN3_DEVICE, kvs: { SmartHeatingSys1: systemData(0, VERSION_STORED_AS_A_NUMBER) },
+            components: virtualComponents(PERIOD_OF_12_HOURS),
+        });
+        assert.equal(callIndex(sim, 'Virtual.Delete'), -1);
+        assert.equal(sim.storedJson('SmartHeatingSys1').Version, SCRIPT_VERSION);
     });
 
     it('plans from the component values of an existing installation', () => {

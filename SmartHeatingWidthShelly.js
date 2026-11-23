@@ -112,7 +112,7 @@ let _ = {
     scId: '',       //schedule ID
     manu: false,    //manual heating flag
     prov: "None",   //network provider name
-    newV: 4.9,      //new script version
+    newV: "4.9.1",  //new script version
     sdOk: false,    //system data OK
     cdOk: false,    //configuration data OK
 };

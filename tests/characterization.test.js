@@ -6,11 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createShelly, runWatchdog, ROOT } = require('./harness');
 const oracle = require('./oracle');
+const limits = require('./limits');
 const {
     SCRIPT_VERSION, CYCLE_SECONDS, DEFAULT_CONF, STORAGE_TANK_CONF, HOT_WATER_CONF,
     NORMAL_DAY, HOT_WATER_DAY, NEGATIVE_DAY, SPRING_DST_DAY, AUTUMN_DST_DAY,
     HEATING_SCRIPT_ID, WATCHDOG_SCRIPT_ID, HEATING_SCRIPT_ENTRY, GEN2_PRO_DEVICE, GEN3_DEVICE, GEN4_DEVICE,
-    MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS,
+    MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS, idleScripts,
 } = require('./settings');
 
 const SECONDS_PER_HOUR = MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
@@ -32,6 +33,13 @@ const LAST_HOUR_BEFORE_TOMORROWS_PRICES = '2026-10-07T22:50:00+03:00';
 const PRICES_OF_NORMAL_DAY = 'https://dashboard.elering.ee/api/nps/price/csv?fields=ee&start=2026-10-06T21:00Z&end=2026-10-07T21:00Z';
 const RUNNING_WATCHDOG = { id: WATCHDOG_SCRIPT_ID, name: 'watchdog', running: true, enable: true };
 const HEATING_SCRIPT_WITHOUT_AUTOSTART = Object.assign({}, HEATING_SCRIPT_ENTRY, { enable: false });
+const OTHER_SCRIPTS = idleScripts(limits.SCRIPT_LIMIT - 1, HEATING_SCRIPT_ID + 1);
+const FAILED_WATCHDOG_INSTALLS = [
+    ['the device has no room for one more script', { scripts: [HEATING_SCRIPT_ENTRY].concat(OTHER_SCRIPTS) }],
+    ['the scripts of the device cannot be listed', { rpcFail: /^Script\.List$/ }],
+    ['the running watchdog cannot be stopped', { scripts: [HEATING_SCRIPT_ENTRY, RUNNING_WATCHDOG], rpcFail: /^Script\.Stop$/ }],
+    ['the code of the watchdog cannot be stored', { rpcFail: /^Script\.PutCode$/ }],
+];
 
 function kvsWith(conf) {
     return { SmartHeatingConf1: JSON.stringify(Object.assign({}, DEFAULT_CONF, conf)) };
@@ -308,6 +316,14 @@ describe('script autostart and watchdog', () => {
         const expected = fs.readFileSync(path.join(ROOT, 'files', 'watchdog-min.js'), 'utf8').trim();
         assert.equal(sim.scriptCode[WATCHDOG_SCRIPT_ID], expected);
     });
+
+    for (const [reason, device] of FAILED_WATCHDOG_INSTALLS) {
+        it(`asks for prices again the next day when ${reason}`, () => {
+            const sim = run(Object.assign({ kvs: kvsWith({}) }, device)).runFor(HOURS_PER_DAY * SECONDS_PER_HOUR);
+            assert.equal(sim.crashed, null, sim.logs.join('\n'));
+            assert.ok(sim.httpRequests.length > 1);
+        });
+    }
 
     it('deletes the schedule when the heating script stops', () => {
         const sim = run({ kvs: kvsWith({}) });

@@ -958,6 +958,8 @@ function f_Wd() {
             } else {
                 Shelly.call('Script.Stop', { id: id }, putC, { id: id });               //stop the existing watchdog 
             }
+        } else {
+            _.isLp = false;
         }
     });
 }
@@ -966,6 +968,7 @@ function f_Wd() {
 function putC(res, err, msg, data) {
     if (err !== 0) {
         print(_.pId, "Watchdog script not created:", msg, ". Schedule will not be deleted if heating script is stopped or deleted.");
+        _.isLp = false;
     } else {
         let code = 'let scId=0;function strt(){Shelly.call("KVS.Get",{key:"SmartHeatingSys"+scId},(function(e){e&&delS(JSON.parse(e.value))}))}function delS(e){Shelly.call("Schedule.Delete",{id:e.ExistingSchedule},(function(e,t,d,l){0!==t?print("Script #"+scId,"schedule ",l.id," deletion by watchdog failed."):print("Script #"+scId,"schedule ",l.id," deleted by watchdog.")}),{id:e.ExistingSchedule}),updK(e)}function updK(e){e.ExistingSchedule=0,Shelly.call("KVS.set",{key:"SmartHeatingSys"+scId,value:JSON.stringify(e)})}Shelly.addStatusHandler((function(e){"script"!==e.name||e.delta.running||(scId=e.id,strt())}));'
         const id = res.id > 0 ? res.id : data.id;   //get the script ID
@@ -974,6 +977,7 @@ function putC(res, err, msg, data) {
                 a_St(data.id);
             } else {
                 print(_.pId, "Code is not added to the script:", msg, ". Schedule will notbe deleted if heating script is stopped or deleted.")
+                _.isLp = false;
             }
         }, { id: id });
     }

@@ -4,9 +4,11 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { createShelly } = require('./harness');
 const limits = require('./limits');
+const { idleScripts } = require('./settings');
 
 const JOB = { enable: true, timespec: '0 0 23 * * *', calls: [{ method: 'Switch.Set', params: { id: 0, on: true } }] };
 const MISSING_ID = 77;
+const FIRST_SCRIPT_ID = 1;
 const QUOTE_COUNT_OF_A_JSON_STRING = 2;
 
 function emptyDevice() {
@@ -49,6 +51,20 @@ describe('simulated device limits', () => {
         const sim = createShelly({ code: '', scripts }).load();
         assert.equal(sim.rpc('Script.Create', { name: 'new' }).result.id, 2);
         assert.equal(sim.scripts.find((script) => script.id === 2).enable, false);
+    });
+
+    it(`holds at most ${limits.SCRIPT_LIMIT} scripts`, () => {
+        const sim = createShelly({ code: '', scripts: idleScripts(limits.SCRIPT_LIMIT, FIRST_SCRIPT_ID) }).load();
+        assert.equal(sim.rpc('Script.Create', { name: 'one more' }).code, limits.ERR_RESOURCE_EXHAUSTED);
+        assert.equal(sim.scripts.length, limits.SCRIPT_LIMIT);
+    });
+
+    it('fails the RPC methods named by rpcFail and no other', () => {
+        const sim = createShelly({ code: '', rpcFail: /^Script\.List$/ }).load();
+        const answer = sim.rpc('Script.List');
+        assert.equal(answer.result, undefined);
+        assert.equal(answer.code, limits.ERR_RPC_FAILURE_ASSUMED);
+        assert.equal(sim.rpc('KVS.Set', { key: 'any', value: '1' }).code, 0);
     });
 
     it('answers Schedule.Delete of a missing ID with invalid argument', () => {

@@ -17,7 +17,7 @@ Node 22 or newer, no dependencies. `node --test` and running one file work as we
 | `harness.js` | The simulated device: `Shelly.call`, `Timer`, KVS, schedules, virtual components, scripts, a fake clock and HTTP answers from `fixtures/`. |
 | `limits.js` | Device limits and RPC error codes used by the simulation. |
 | `oracle.js` | Expected hours and Elektrilevi fees calculated from the price file and the Elektrilevi price list, without the code of the script. |
-| `settings.js` | Configurations, days and device types shared by the tests. |
+| `settings.js` | Configurations, days, device types and script entries shared by the tests. |
 | `fixtures/` | Elering price answers (15 minute prices, `fields=ee`) and an Open-Meteo forecast, downloaded from the real services. |
 | `espruino/` | The memory test, see [Memory](#memory). |
 
@@ -45,6 +45,7 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `elering` | Price fixture |
 | `temperatures` | Forecast temperatures instead of the fixture |
 | `httpFail` | RegExp of URLs whose `HTTP.GET` fails |
+| `rpcFail` | RegExp of RPC method names that fail, matched against the name as the script writes it (`KVS.set`, `KVS.Get`) |
 | `deviceInfo` | Result of `Shelly.getDeviceInfo()` |
 | `scripts`, `scriptId` | Scripts on the device, `[{ id, name, running, enable }]`, and the ID of the running one |
 | `code` | Source text to run instead of the heating script |
@@ -69,6 +70,7 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 | `Schedule.Delete` of a missing ID | `-103` | Device log in the discussion of pull request #11, and Gen4 |
 | `Schedule.Update` of a missing ID | `-105` | Device log in the discussion of pull request #11, and Gen4 |
 | ID of a new schedule | the highest existing ID plus one | Gen4: with schedules 2 and 3, deleting 3 gave 3 again, deleting 2 gave 4 |
+| Scripts per device | 10, then `-108` | Gen4: the eleventh script was refused with "Reached the maximum 10 of stored scripts" |
 | ID of a new script | the lowest free one | Gen4 |
 | Autostart of a script made by `Script.Create` | off | Gen4 |
 | `Script.Start`, `Script.Stop` | answer `{ was_running }` | Shelly docs, Script, and Gen4 |
@@ -78,9 +80,11 @@ The network fee tests call `fFee` and set `_.prov` and `c.pack` inside the scrip
 
 The simulated devices are a Shelly Plus 1PM (Gen2, KVS mode), a Shelly Pro 1PM (Gen2, Virtual Component mode), a Shelly 1PM Gen3 and a Shelly 1PM Mini Gen4 (both Virtual Component mode). The Gen2 and Gen3 devices report firmware 1.7.6, the Gen4 reports 2.2.1. They differ only in what `Shelly.getDeviceInfo()` answers, which decides the mode. The limits and error codes are the same for all of them.
 
-### Assumed error code
+### Assumed error codes
 
 No source gives the error code of an `HTTP.GET` that fails. The simulation answers it with `ERR_HTTP_FAILURE_ASSUMED`. The script only tests for a non-zero code, so the number does not change a test result.
+
+The same holds for a method that `rpcFail` makes fail. The tests use it for `Script.List`, `Script.Stop` and `Script.PutCode`. No device was seen to refuse these while a watchdog was installed (the one refusal seen, `Script.PutCode` of code outside ASCII, is under [What is not simulated](#what-is-not-simulated)), so the simulation answers with `ERR_RPC_FAILURE_ASSUMED`, and the script only tests for a missing result or a non-zero code.
 
 More than 5 RPC calls in flight, more than 5 active timers, a run that never comes to rest and an exception in a timer or RPC callback end a test with `sim.crashed` set. An exception while the script loads fails the test directly, and so does an RPC method the simulation does not know.
 

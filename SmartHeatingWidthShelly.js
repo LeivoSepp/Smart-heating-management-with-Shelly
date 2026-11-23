@@ -907,7 +907,7 @@ function loop() {
         return;
     }
     _.isLp = true;
-    if (updt(_.tsPr) || c.isFc && updt(_.tsFc)) {   //check if the prices or forecast needs to be updated
+    if (updt(_.tsPr) || c.isFc && c.tPer > 0 && updt(_.tsFc)) {   //check if the prices or forecast needs to be updated
         strt();                                     //start the program
     } else {
         _.isLp = false;

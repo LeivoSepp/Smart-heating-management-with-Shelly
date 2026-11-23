@@ -13,7 +13,8 @@ const {
     MILLISECONDS_PER_SECOND, SECONDS_PER_MINUTE, MINUTES_PER_HOUR, HOURS_PER_DAY, RELAY_OVERLAP_SECONDS,
 } = require('./settings');
 
-const RELAY_DELAY_SECONDS = MINUTES_PER_HOUR * SECONDS_PER_MINUTE + RELAY_OVERLAP_SECONDS;
+const SECONDS_PER_HOUR = MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
+const RELAY_DELAY_SECONDS = SECONDS_PER_HOUR + RELAY_OVERLAP_SECONDS;
 const FALLBACK_LOG = 'Internet error';
 const GROUP_MEMBER_COUNT = 9;
 const OWN_COMPONENT_COUNT = GROUP_MEMBER_COUNT + 1;
@@ -71,6 +72,10 @@ function hasLogged(sim, text) {
 
 function callIndex(sim, method) {
     return sim.calls.findIndex((call) => call.method === method);
+}
+
+function callCount(sim, method) {
+    return sim.calls.filter((call) => call.method === method).length;
 }
 
 function hasCalled(sim, method, id) {
@@ -182,6 +187,12 @@ describe('hourly planning', () => {
     it('counts the first quarter of the next day as hour 0 without a period', () => {
         const sim = run({ kvs: kvsWith({ TimePeriod: 0, AlwaysOnPrice: 2 }), elering: NEGATIVE_DAY.fixture, now: NEGATIVE_DAY.now });
         assert.deepEqual(sim.timespecs(), hourlyTimespec([0, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]));
+    });
+
+    it('plans once, not every five minutes, without a period when the forecast is switched on', () => {
+        const sim = run({ kvs: kvsWith({ TimePeriod: 0, IsForecastUsed: true }) }).runFor(SECONDS_PER_HOUR);
+        assert.equal(sim.httpRequests.length, 1);
+        assert.equal(callCount(sim, 'Schedule.Create'), 1);
     });
 
     it('deletes the schedule and stores an empty schedule ID when every hour is above AlwaysOffPrice', () => {

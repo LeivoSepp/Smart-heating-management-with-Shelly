@@ -406,6 +406,9 @@ describe('network fee', () => {
         ['winter weekday after the morning peak', '2026-01-14T12:00:00+02:00', 'VORK5', 52.9],
         ['winter weekday after the evening peak', '2026-01-14T20:00:00+02:00', 'VORK5', 52.9],
         ['winter weekend after the evening peak', '2026-01-17T20:00:00+02:00', 'VORK5', 30.3],
+        ['winter Saturday morning', '2026-01-17T10:00:00+02:00', 'VORK5', 30.3],
+        ['winter Sunday morning', '2026-01-18T10:00:00+02:00', 'VORK5', 30.3],
+        ['winter Saturday morning on VORK2', '2026-01-17T10:00:00+02:00', 'VORK2', 35.1],
         ['winter weekday night', '2026-01-14T23:00:00+02:00', 'VORK5', 30.3],
         ['summer weekday day', '2026-06-10T10:00:00+03:00', 'VORK2', 60.7],
         ['summer weekday early morning', '2026-06-10T06:45:00+03:00', 'VORK2', 35.1],
@@ -417,13 +420,6 @@ describe('network fee', () => {
         it(`Elektrilevi ${name}`, () => {
             assert.equal(feeAt('Elektlevi', packageName, pricedTime), fee);
             assert.equal(oracle.elektrileviFee(epochSeconds(pricedTime), packageName), fee);
-        });
-    }
-
-    const WINTER_SATURDAY_MORNING = '2026-01-17T10:00:00+02:00';
-    for (const [packageName, weekdayPeakRate] of [['VORK5', 81.8], ['VORK2', 60.7]]) {
-        it(`Elektrilevi ${packageName} charges a winter weekend morning at the weekday peak rate`, () => {
-            assert.equal(feeAt('Elektlevi', packageName, WINTER_SATURDAY_MORNING), weekdayPeakRate);
         });
     }
 

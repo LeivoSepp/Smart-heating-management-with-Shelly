@@ -27,7 +27,6 @@ The Elering files are ISO-8859-1, as Elering serves them. The only character out
 
 The tests pin what the script does today, also where that differs from the price list, the calendar or its own comments. `oracle.js` follows the price list and the calendar day, so these cases are pinned with literal values, without it:
 
-- On a winter weekend morning the script charges the weekday peak rate.
 - Imatra summer or winter hours follow the clock of the device, not the hour being priced.
 - The plan of the 23 hour day 2026-03-29 contains hour 0 of the next day.
 - Without a period, the first quarter of the next day counts as hour 0.

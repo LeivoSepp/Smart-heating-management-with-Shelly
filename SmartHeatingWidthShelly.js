@@ -686,7 +686,7 @@ function fFee(epoch) {
         if ((mnth >= 10 || mnth <= 2) && (day === 0 || day === 6) && hour >= 16 && hour < 20) {
             // peak holiday: Nov-Mar, SA-SU at 16:00–20:00
             return c.pack.hMRt;
-        } else if ((mnth >= 10 || mnth <= 2) && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
+        } else if ((mnth >= 10 || mnth <= 2) && day !== 0 && day !== 6 && ((hour >= 9 && hour < 12) || (hour >= 16 && hour < 20))) {
             // peak daytime: Nov-Mar: MO-FR at 09:00–12:00 and at 16:00–20:00
             return c.pack.dMRt;
         } else if (hour < 7 || hour >= 22 || day === 6 || day === 0) {
